@@ -403,8 +403,8 @@ B.S.B.EB.S.BB`
     const e = new Tank(sp.x, sp.y, 'down', false);
     const roll = Math.random();
     if (roll < 0.2) { e.type = 'fast'; e.speed = 2.6; e.color = '#4cc9f0'; e.score = 200; }
-    else if (roll < 0.35) { e.type = 'armor'; e.hp = 3; e.color = '#adb5bd'; e.score = 300; }
-    else { e.type = 'normal'; e.color = '#ef476f'; e.score = 100; }
+    else if (roll < 0.35) { e.type = 'armor'; e.hp = 3; e.color = '#e63946'; e.score = 300; }
+    else { e.type = 'normal'; e.color = '#b0b0b0'; e.score = 100; }
     e.moveTimer = Math.random() * 30;
     enemies.push(e);
     enemiesLeftInPool -= 1;
@@ -540,8 +540,43 @@ B.S.B.EB.S.BB`
       ctx.fillStyle = '#1d6fa5';
       ctx.fillRect(x, y, CELL, CELL);
     } else if (type === BASE) {
-      ctx.fillStyle = base.alive ? '#ffd166' : '#333';
-      ctx.fillRect(x, y, CELL, CELL);
+      // handled by drawBase() over the whole 2x2 base block
+    }
+  }
+
+  function drawBase(x, y) {
+    const w = CELL * 2, h = CELL * 2;
+    if (!base.alive) {
+      ctx.fillStyle = '#3a1414';
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#7a2c08';
+      ctx.fillRect(x + 4, y + 20, w - 8, 6);
+      ctx.fillRect(x + 10, y + 10, w - 20, 6);
+      return;
+    }
+    ctx.fillStyle = '#c9a13b';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#5a4315';
+    // pixel eagle silhouette (10x10 grid scaled to 4px)
+    const eagle = [
+      '..1111....',
+      '.111111...',
+      '11111111..',
+      '.11111111.',
+      '..1111111.',
+      '...111111.',
+      '..1111111.',
+      '.11111111.',
+      '11111111..',
+      '.111111...'
+    ];
+    const px = w / eagle[0].length;
+    for (let r = 0; r < eagle.length; r++) {
+      for (let c = 0; c < eagle[r].length; c++) {
+        if (eagle[r][c] === '1') {
+          ctx.fillRect(x + c * px, y + r * px, px + 0.5, px + 0.5);
+        }
+      }
     }
   }
 
@@ -563,17 +598,28 @@ B.S.B.EB.S.BB`
     ctx.translate(t.x + TANK / 2, t.y + TANK / 2);
     const angle = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 }[t.dir];
     ctx.rotate(angle);
+
+    // hull
     ctx.fillStyle = t.color;
-    ctx.fillRect(-TANK / 2 + 4, -TANK / 2 + 2, TANK - 8, TANK - 4);
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-TANK / 2 + 2, -TANK / 2 + 4, 6, TANK - 8);
-    ctx.fillRect(TANK / 2 - 8, -TANK / 2 + 4, 6, TANK - 8);
-    ctx.fillStyle = '#222';
-    ctx.fillRect(-3, -TANK / 2 - 4, 6, TANK / 2 + 4);
-    ctx.beginPath();
-    ctx.arc(0, 0, 8, 0, Math.PI * 2);
-    ctx.fillStyle = '#222';
-    ctx.fill();
+    ctx.fillRect(-TANK / 2 + 6, -TANK / 2 + 2, TANK - 12, TANK - 4);
+
+    // tracks with tread rungs (classic NES ladder pattern)
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(-TANK / 2 + 1, -TANK / 2 + 2, 7, TANK - 4);
+    ctx.fillRect(TANK / 2 - 8, -TANK / 2 + 2, 7, TANK - 4);
+    ctx.fillStyle = '#3a3a3a';
+    for (let ty = -TANK / 2 + 4; ty <= TANK / 2 - 6; ty += 6) {
+      ctx.fillRect(-TANK / 2 + 1, ty, 7, 2);
+      ctx.fillRect(TANK / 2 - 8, ty, 7, 2);
+    }
+
+    // square turret + barrel (classic Battle City silhouette)
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(-3, -TANK / 2 - 4, 6, TANK / 2 - 2);
+    ctx.fillStyle = t.color;
+    ctx.fillRect(-8, -8, 16, 16);
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(-5, -5, 10, 10);
     ctx.restore();
   }
 
@@ -585,9 +631,10 @@ B.S.B.EB.S.BB`
     for (let r = 0; r < GRID; r++) {
       for (let c = 0; c < GRID; c++) {
         const t = grid[r][c];
-        if (t !== EMPTY && t !== GRASS) drawCell(t, c * CELL, r * CELL);
+        if (t !== EMPTY && t !== GRASS && t !== BASE) drawCell(t, c * CELL, r * CELL);
       }
     }
+    drawBase(baseCell.c * CELL, baseCell.r * CELL);
 
     if (player) drawTank(player);
     for (const e of enemies) drawTank(e);
@@ -601,12 +648,20 @@ B.S.B.EB.S.BB`
       }
     }
 
-    ctx.fillStyle = '#ffd166';
-    for (const s of sparks) {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 10 - s.life, 0, Math.PI * 2);
-      ctx.fill();
+    for (const s of sparks) drawSpark(s);
+  }
+
+  function drawSpark(s) {
+    const size = 10 - s.life;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.fillStyle = s.life > 4 ? '#fff3b0' : '#ff8c42';
+    for (let i = 0; i < 8; i++) {
+      const a = (Math.PI / 4) * i;
+      ctx.fillRect(Math.cos(a) * size - 2, Math.sin(a) * size - 2, 4, 4);
     }
+    ctx.fillRect(-3, -3, 6, 6);
+    ctx.restore();
   }
 
   function loop() {
