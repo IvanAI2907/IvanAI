@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Птеродактиль</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --glass: rgba(28, 14, 44, 0.42);
+    --stroke: rgba(255, 214, 190, 0.2);
+    --a1: #ffb347;
+    --a2: #ff5e8a;
+    --text: #fff4ea;
+    --muted: rgba(255, 232, 214, 0.68);
+    --danger: #ff4262;
+    --ok: #7dffb0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #1b1026;
+    font-family: 'Rubik', 'Segoe UI', Roboto, Arial, sans-serif;
+    color: var(--text);
+    user-select: none; -webkit-user-select: none;
+  }
+  canvas#game { display: block; width: 100vw; height: 100vh; }
+
+  .panel {
+    position: absolute;
+    background: var(--glass);
+    backdrop-filter: blur(9px) saturate(130%);
+    -webkit-backdrop-filter: blur(9px) saturate(130%);
+    border: 1px solid var(--stroke);
+    border-radius: 16px;
+    padding: 12px 16px;
+    box-shadow: 0 10px 34px rgba(20, 0, 30, 0.28), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .label {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  .bar {
+    position: relative; height: 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.12); overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--a1), var(--a2));
+    box-shadow: 0 0 12px rgba(255, 120, 120, .6);
+    transition: width .25s ease-out;
+  }
+
+  #rankPanel { top: 16px; left: 16px; width: 290px; }
+  #rankHead { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+  #rankIcon {
+    width: 44px; height: 44px; border-radius: 12px; flex: none;
+    display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    box-shadow: 0 0 18px rgba(255, 110, 120, .55);
+  }
+  #rankName { font-size: 21px; font-weight: 800; line-height: 1.1; }
+  #pips { display: flex; gap: 5px; margin-top: 5px; }
+  #pips span { width: 22px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); }
+  #pips span.on { background: linear-gradient(90deg, var(--a1), var(--a2)); box-shadow: 0 0 6px var(--a2); }
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  #xpText { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #stats { display: flex; gap: 16px; margin-top: 10px; font-size: 14px; }
+  #stats b { font-size: 17px; font-variant-numeric: tabular-nums; }
+
+  #altPanel { top: 16px; right: 16px; text-align: right; min-width: 170px; }
+  #altValue { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; margin: 2px 0 4px; }
+  #altValue small { font-size: 15px; font-weight: 500; color: var(--muted); }
+  #altSub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #altSub b { color: var(--text); font-weight: 600; }
+  #altGauge { height: 4px; border-radius: 2px; margin-top: 8px; background: rgba(255,255,255,.12); overflow: hidden; }
+  #altGauge i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7fd4ff, #d8b4ff); }
+
+  #healthPanel { bottom: 18px; left: 50%; transform: translateX(-50%); width: min(460px, calc(100vw - 260px)); min-width: 250px; }
+  #hpBar { background: linear-gradient(90deg, #ff3b5c, #ff9a5c 60%, #ffd36b); box-shadow: 0 0 14px rgba(255, 80, 90, .7); }
+  .bar.hp { height: 14px; border-radius: 8px; }
+  #hpText { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #dashRow { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  #dashRow .label { font-size: 10px; white-space: nowrap; }
+  .bar.dash { height: 5px; flex: 1; }
+  #dashBar { background: linear-gradient(90deg, #7fd4ff, #b48cff); box-shadow: 0 0 8px rgba(130,180,255,.7); transition: none; }
+  #healthPanel.hurt { animation: hurt .35s; }
+  @keyframes hurt { 0%,100% { transform: translateX(-50%); } 25% { transform: translateX(calc(-50% - 6px)); } 75% { transform: translateX(calc(-50% + 6px)); } }
+
+  #radarWrap { bottom: 18px; right: 18px; padding: 10px; border-radius: 50%; }
+  #radar { display: block; width: 150px; height: 150px; }
+
+  #warn {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 999px;
+    background: rgba(120, 0, 20, .45); border: 1px solid rgba(255, 90, 110, .6);
+    color: #ffd6dc; font-weight: 700; letter-spacing: .12em; font-size: 13px;
+    opacity: 0; transition: opacity .3s; pointer-events: none;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  #warn.on { opacity: 1; animation: pulse 0.9s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 26px rgba(255, 60, 90, .75); } }
+
+  #edgeMsg {
+    position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+    font-size: 14px; color: #fff0e6; text-shadow: 0 2px 10px rgba(0,0,0,.5);
+    opacity: 0; transition: opacity .5s; pointer-events: none;
+  }
+  #edgeMsg.on { opacity: .95; }
+
+  #hint {
+    left: 50%; top: 70px; transform: translateX(-50%);
+    width: min(560px, calc(100vw - 32px));
+    transition: opacity 1.2s, transform 1.2s;
+    text-align: center;
+  }
+  #hint.hide { opacity: 0; transform: translate(-50%, -16px); pointer-events: none; }
+  #hint h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+  #hint p { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+  .keys { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 18px; text-align: left; font-size: 13px; }
+  kbd {
+    display: inline-block; min-width: 26px; padding: 2px 7px; margin-right: 6px;
+    border-radius: 6px; text-align: center; font: 600 12px 'Rubik', sans-serif;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+    border-bottom-width: 3px; color: #fff;
+  }
+
+  #banner {
+    position: absolute; top: 28%; left: 50%; transform: translate(-50%, -50%) scale(.9);
+    text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity .4s, transform .6s cubic-bezier(.2,1.6,.4,1);
+  }
+  #banner.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #banner .t1 { font-size: 15px; letter-spacing: .5em; color: #ffe6c7; text-shadow: 0 0 14px rgba(255,160,80,.9); }
+  #banner .t2 {
+    font-size: clamp(34px, 6vw, 64px); font-weight: 800; line-height: 1.1;
+    background: linear-gradient(90deg, #fff1c1, #ffb347, #ff5e8a, #c77dff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 18px rgba(255, 120, 90, .7));
+  }
+  #banner .t3 { font-size: 14px; color: var(--text); margin-top: 6px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+
+  #toasts { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); pointer-events: none; width: 0; }
+  .toast {
+    position: absolute; left: 0; transform: translateX(-50%);
+    white-space: nowrap; font-weight: 700; font-size: 16px;
+    color: #fff6d8; text-shadow: 0 0 10px rgba(255, 180, 60, .9), 0 2px 4px rgba(0,0,0,.5);
+    animation: floatUp 1.3s ease-out forwards;
+  }
+  .toast.bad { color: #ffd0d8; text-shadow: 0 0 10px rgba(255, 50, 80, .9), 0 2px 4px rgba(0,0,0,.5); }
+  @keyframes floatUp {
+    0% { opacity: 0; transform: translate(-50%, 10px) scale(.8); }
+    15% { opacity: 1; transform: translate(-50%, 0) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(1); }
+  }
+
+  #flash, #vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+  #flash { background: radial-gradient(circle, rgba(255,250,230,.95), rgba(255,170,90,.6) 45%, rgba(255,90,140,0) 80%); }
+  #vignette { box-shadow: inset 0 0 160px 40px rgba(255, 0, 40, .75); }
+
+  .overlay {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: radial-gradient(circle at center, rgba(40, 10, 50, .55), rgba(10, 0, 20, .85));
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    z-index: 10;
+  }
+  .overlay.show { display: flex; animation: fadeIn .6s; }
+  @keyframes fadeIn { from { opacity: 0; } }
+  .card {
+    background: rgba(35, 16, 52, .78); border: 1px solid var(--stroke); border-radius: 22px;
+    padding: 30px 38px; text-align: center; min-width: 320px; max-width: calc(100vw - 32px);
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .card h1 {
+    margin: 0 0 6px; font-size: 40px; font-weight: 800;
+    background: linear-gradient(90deg, #ffb347, #ff5e8a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .card .sub { color: var(--muted); margin-bottom: 20px; }
+  .results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 22px; }
+  .results div { background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px 14px; }
+  .results b { display: block; font-size: 22px; margin-top: 2px; }
+  .results .wide { grid-column: span 2; }
+  button.btn {
+    font: 700 16px 'Rubik', sans-serif; color: #2a0f1c; cursor: pointer;
+    padding: 13px 30px; border: 0; border-radius: 999px;
+    background: linear-gradient(90deg, #ffd36b, #ff8a5c, #ff5e8a);
+    box-shadow: 0 8px 24px rgba(255, 94, 138, .45);
+    transition: transform .15s, box-shadow .15s;
+  }
+  button.btn:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(255, 94, 138, .6); }
+  #pause .card h1 { font-size: 32px; }
+  #loadErr .card h1 { font-size: 26px; }
+
+  @media (max-width: 760px) {
+    #rankPanel { width: 220px; padding: 10px 12px; }
+    #rankName { font-size: 17px; }
+    #altValue { font-size: 26px; }
+    #radar { width: 100px; height: 100px; }
+    #healthPanel { width: calc(100vw - 170px); left: 16px; transform: none; min-width: 0; }
+    #hint { top: 190px; }
+    .keys { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div class="panel" id="rankPanel">
+    <div class="label">Эволюция · ранг <span id="rankIdx">1</span>/4</div>
+    <div id="rankHead">
+      <div id="rankIcon">🥚</div>
+      <div>
+        <div id="rankName">Птенец</div>
+        <div id="pips"><span class="on"></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+    <div class="row"><span class="label">Опыт</span><span id="xpText">0 / 12</span></div>
+    <div class="bar"><i id="xpBar"></i></div>
+    <div id="stats">
+      <span>Съедено: <b id="eaten">0</b></span>
+      <span>Очки: <b id="score">0</b></span>
+    </div>
+  </div>
+
+  <div class="panel" id="altPanel">
+    <div class="label">Высота полёта</div>
+    <div id="altValue">0<small> м</small></div>
+    <div id="altSub">над землёй <b id="agl">0</b> м · <b id="spd">0</b> км/ч</div>
+    <div id="altGauge"><i id="altBar"></i></div>
+  </div>
+
+  <div id="warn">⚠ ХИЩНИК ОХОТИТСЯ</div>
+  <div id="edgeMsg">Туман сгущается — поворачивай назад</div>
+
+  <div class="panel" id="healthPanel">
+    <div class="row"><span class="label">Здоровье</span><span id="hpText">100</span></div>
+    <div class="bar hp"><i id="hpBar" style="width:100%"></i></div>
+    <div id="dashRow"><span class="label">Рывок · Shift</span><div class="bar dash"><i id="dashBar" style="width:100%"></i></div></div>
+  </div>
+
+  <div class="panel" id="radarWrap"><canvas id="radar" width="300" height="300"></canvas></div>
+
+  <div class="panel" id="hint">
+    <h3>Ты — птенец птеродактиля</h3>
+    <p>Лови светящихся существ, копи опыт и эволюционируй. Красноглазых хищников избегай, пока не вырастешь.</p>
+    <div class="keys">
+      <div><kbd>W</kbd><kbd>S</kbd> нос вниз / вверх</div>
+      <div><kbd>A</kbd><kbd>D</kbd> крен и поворот</div>
+      <div><kbd>Space</kbd> взмах крыльями</div>
+      <div><kbd>Shift</kbd> пике-рывок для атаки</div>
+      <div><kbd>P</kbd> пауза · <kbd>M</kbd> звук</div>
+      <div><kbd>H</kbd> показать подсказку</div>
+    </div>
+  </div>
+
+  <div id="banner"><div class="t1">ЭВОЛЮЦИЯ</div><div class="t2" id="bannerRank">Молодой ящер</div><div class="t3" id="bannerSub"></div></div>
+  <div id="toasts"></div>
+</div>
+
+<div class="overlay" id="pause"><div class="card"><h1>Пауза</h1><div class="sub">Нажми P, чтобы продолжить полёт</div></div></div>
+
+<div class="overlay" id="gameover">
+  <div class="card">
+    <h1>Игра окончена</h1>
+    <div class="sub" id="goReason">Тебя настиг хищник</div>
+    <div class="results">
+      <div class="wide"><span class="label">Итоговый ранг</span><b id="goRank">Птенец</b></div>
+      <div><span class="label">Съедено</span><b id="goEaten">0</b></div>
+      <div><span class="label">Очки</span><b id="goScore">0</b></div>
+      <div><span class="label">Время полёта</span><b id="goTime">0:00</b></div>
+      <div><span class="label">Рекорд</span><b id="goBest">0</b></div>
+    </div>
+    <button class="btn" id="restart">Начать заново</button>
+  </div>
+</div>
+
+<div class="overlay" id="loadErr">
+  <div class="card">
+    <h1>Не удалось загрузить Three.js</h1>
+    <div class="sub">Игре нужен интернет, чтобы один раз подгрузить движок с CDN.<br>Проверь подключение и обнови страницу.</div>
+    <button class="btn" onclick="location.reload()">Обновить</button>
+  </div>
+</div>
+
+<script>
+  // If the module below fails to fetch Three.js, show a readable error instead of a blank screen.
+  setTimeout(function () {
+    if (!window.__gameStarted) document.getElementById('loadErr').classList.add('show');
+  }, 12000);
+</script>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+window.__gameStarted = true;
+
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const V3 = THREE.Vector3;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (a, b, l, dt) => lerp(a, b, 1 - Math.exp(-l * dt));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const angleDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+const dirFrom = (yaw, pitch, out) => out.set(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+
+function hash2(x, z) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(z | 0, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz), b = hash2(ix + 1, iz), c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
+  return lerp(lerp(a, b, ux), lerp(c, d, ux), uz) * 2 - 1;
+}
+function fbm(x, z, oct) {
+  let s = 0, a = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { s += a * vnoise(x * f + i * 17.3, z * f - i * 9.1); n += a; a *= 0.5; f *= 2.03; }
+  return s / n;
+}
+function ridge(x, z, oct) {
+  let s = 0, a = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { let v = 1 - Math.abs(vnoise(x * f + 31.7 * i, z * f + 11.1 * i)); v *= v; s += a * v; n += a; a *= 0.5; f *= 2.1; }
+  return s / n;
+}
+
+/* =====================================================================
+   World constants
+   ===================================================================== */
+const WORLD_R = 2100;          // soft boundary radius
+const TERRAIN_SIZE = 7200;
+const TERRAIN_SEG = 230;
+const CEILING = 560;
+
+function terrainHeight(x, z) {
+  const r = Math.hypot(x, z);
+  let h = fbm(x / 520, z / 520, 4) * 58;
+  const m = ridge(x / 800 + 5.2, z / 800 - 3.1, 4);
+  h += Math.pow(m, 2.4) * 280 * (0.3 + 0.7 * smoothstep(200, 1100, r));
+  h += smoothstep(1700, 2800, r) * (140 + 160 * m);
+  return h - 8;
+}
+const groundAt = (x, z) => Math.max(terrainHeight(x, z), 0);
+
+/* =====================================================================
+   Renderer, scene, sky, lights
+   ===================================================================== */
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+
+const scene = new THREE.Scene();
+const HORIZON = new THREE.Color(0xffa27e);
+scene.fog = new THREE.Fog(HORIZON, 260, 1650);
+scene.background = HORIZON.clone();
+
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 7000);
+
+const sunDir = new V3(0.42, 0.16, 1).normalize();
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(5000, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      top: { value: new THREE.Color(0x24164f) },
+      mid: { value: new THREE.Color(0xc2527e) },
+      horizon: { value: HORIZON },
+      sunColor: { value: new THREE.Color(0xffd49a) },
+      sunDir: { value: sunDir },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 top, mid, horizon, sunColor, sunDir;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float h = d.y;
+        vec3 col = mix(horizon, mid, smoothstep(0.02, 0.22, h));
+        col = mix(col, top, smoothstep(0.2, 0.8, h));
+        float s = max(dot(d, normalize(sunDir)), 0.0);
+        col += sunColor * (pow(s, 6.0) * 0.35 + pow(s, 48.0) * 0.7);
+        col = mix(col, vec3(1.3, 1.15, 0.9), smoothstep(0.9982, 0.9990, s));
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  })
+);
+sky.renderOrder = -1;
+scene.add(sky);
+
+const hemi = new THREE.HemisphereLight(0xffc6a6, 0x4a2c5e, 1.35);
+const sunLight = new THREE.DirectionalLight(0xffa56e, 2.6);
+sunLight.position.copy(sunDir).multiplyScalar(1000);
+const fill = new THREE.DirectionalLight(0x8a7cff, 0.45);
+fill.position.set(-0.5, 0.6, -1).multiplyScalar(1000);
+scene.add(hemi, sunLight, fill);
+
+/* =====================================================================
+   Terrain, water, vegetation, clouds
+   ===================================================================== */
+function mergeGeometries(list) {
+  const arrays = list.map(g => (g.index ? g.toNonIndexed() : g).attributes.position.array);
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Float32Array(total);
+  let o = 0;
+  for (const a of arrays) { out.set(a, o); o += a.length; }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildTerrain() {
+  const g = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  const step = TERRAIN_SIZE / TERRAIN_SEG;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), z = p.getZ(i);
+    const ix = Math.round((x + TERRAIN_SIZE / 2) / step), iz = Math.round((z + TERRAIN_SIZE / 2) / step);
+    if (ix > 0 && ix < TERRAIN_SEG && iz > 0 && iz < TERRAIN_SEG) {
+      x += (hash2(ix, iz) - 0.5) * step * 0.55;
+      z += (hash2(iz + 911, ix + 37) - 0.5) * step * 0.55;
+    }
+    p.setXYZ(i, x, terrainHeight(x, z), z);
+  }
+  const ng = g.toNonIndexed();
+  g.dispose();
+  const pos = ng.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const a = new V3(), b = new V3(), c = new V3(), e1 = new V3(), e2 = new V3(), n = new V3();
+  const cc = new THREE.Color();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+    e1.subVectors(b, a); e2.subVectors(c, a); n.crossVectors(e1, e2).normalize();
+    const ny = Math.abs(n.y);
+    const y = (a.y + b.y + c.y) / 3;
+    const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
+    const tint = fbm(cx / 180, cz / 180, 2);
+    if (y < -1) cc.setHex(0x8e6f74);
+    else if (y < 3) cc.setHex(0xe3b38a);
+    else if (y > 215 && ny > 0.55) cc.setHex(0xfff0ec);
+    else if (ny < 0.7 || y > 125) cc.setHex(tint > 0 ? 0x8a6470 : 0x6e5263);
+    else if (y < 55) cc.setHex(tint > 0.1 ? 0x86a24f : (tint > -0.2 ? 0x6c9453 : 0x5a8660));
+    else cc.setHex(0x9a8c58);
+    const v = hash2(i, 77);
+    cc.offsetHSL((v - 0.5) * 0.025, 0, (v - 0.5) * 0.07);
+    for (let k = 0; k < 3; k++) { col[(i + k) * 3] = cc.r; col[(i + k) * 3 + 1] = cc.g; col[(i + k) * 3 + 2] = cc.b; }
+  }
+  ng.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  ng.computeVertexNormals();
+  const mesh = new THREE.Mesh(ng, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0 }));
+  scene.add(mesh);
+}
+
+function buildWater() {
+  const g = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 110, 110);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, rand(-0.9, 0.9));
+  g.computeVertexNormals();
+  const water = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    color: 0x5b82c4, roughness: 0.22, metalness: 0.12, flatShading: true, transparent: true, opacity: 0.9,
+  }));
+  scene.add(water);
+  return water;
+}
+
+function buildVegetation() {
+  const tier1 = new THREE.ConeGeometry(1, 0.62, 6); tier1.translate(0, 0.45, 0);
+  const tier2 = new THREE.ConeGeometry(0.72, 0.5, 6); tier2.translate(0, 0.8, 0);
+  const trunk = new THREE.CylinderGeometry(0.12, 0.16, 0.3, 5); trunk.translate(0, 0.15, 0);
+  const treeG = mergeGeometries([tier1, tier2, trunk]);
+  const MAX = 2800;
+  const trees = new THREE.InstancedMesh(treeG, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 }), MAX);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new V3(), pp = new V3(), cc = new THREE.Color(), Y = new V3(0, 1, 0);
+  let n = 0;
+  for (let t = 0; t < 20000 && n < MAX; t++) {
+    const x = rand(-2900, 2900), z = rand(-2900, 2900);
+    const h = terrainHeight(x, z);
+    if (h < 3 || h > 100) continue;
+    const slope = Math.abs(terrainHeight(x + 5, z) - h) + Math.abs(terrainHeight(x, z + 5) - h);
+    if (slope > 5.5) continue;
+    if (fbm(x / 240, z / 240, 3) < -0.05) continue;
+    const w = rand(3.4, 6.2), hh = rand(12, 24);
+    pp.set(x, h - 0.8, z); s.set(w, hh, w); q.setFromAxisAngle(Y, rand(0, 6.28));
+    m.compose(pp, q, s); trees.setMatrixAt(n, m);
+    cc.setHex(pick([0x3d6b4b, 0x4a7a44, 0x2d5a4f, 0x5c7f3c, 0x35604f])).offsetHSL(0, 0, rand(-0.04, 0.04));
+    trees.setColorAt(n, cc);
+    n++;
+  }
+  trees.count = n;
+  scene.add(trees);
+
+  const rockG = new THREE.DodecahedronGeometry(1, 0);
+  const rocks = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ color: 0x7c5d6b, flatShading: true, roughness: 1 }), 500);
+  n = 0;
+  for (let t = 0; t < 6000 && n < 500; t++) {
+    const x = rand(-2900, 2900), z = rand(-2900, 2900);
+    const h = terrainHeight(x, z);
+    if (h < 20) continue;
+    const r = rand(4, 14);
+    pp.set(x, h - r * 0.3, z); s.set(r * rand(0.8, 1.5), r * rand(0.5, 1), r * rand(0.8, 1.4));
+    q.setFromEuler(new THREE.Euler(rand(0, 3), rand(0, 3), rand(0, 3)));
+    m.compose(pp, q, s); rocks.setMatrixAt(n++, m);
+  }
+  rocks.count = n;
+  scene.add(rocks);
+}
+
+const cloudLayers = [];
+function buildClouds() {
+  const puffG = new THREE.IcosahedronGeometry(1, 1);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xfff0ee, emissive: 0xff8f76, emissiveIntensity: 0.22,
+    flatShading: true, roughness: 1, transparent: true, opacity: 0.9,
+  });
+  const layers = [
+    { count: 55, y: [120, 175], r: 2700, s: [10, 20], speed: 0.004 },
+    { count: 45, y: [250, 320], r: 2800, s: [14, 26], speed: -0.0025 },
+    { count: 40, y: [430, 520], r: 3000, s: [20, 36], speed: 0.0016 },
+  ];
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new V3(), p = new V3();
+  for (const L of layers) {
+    const im = new THREE.InstancedMesh(puffG, mat, L.count * 8);
+    let k = 0;
+    for (let c = 0; c < L.count; c++) {
+      const ang = rand(0, Math.PI * 2), rr = Math.sqrt(Math.random()) * L.r;
+      const cx = Math.cos(ang) * rr, cz = Math.sin(ang) * rr, cy = rand(L.y[0], L.y[1]);
+      const bs = rand(L.s[0], L.s[1]);
+      const puffs = 4 + ((Math.random() * 5) | 0);
+      for (let i = 0; i < puffs; i++) {
+        const sc = bs * rand(0.55, 1.1) * (i === 0 ? 1.25 : 1);
+        p.set(cx + rand(-1.7, 1.7) * bs, cy + rand(-0.15, 0.45) * bs, cz + rand(-0.9, 0.9) * bs);
+        s.set(sc, sc * rand(0.5, 0.65), sc * rand(0.8, 1));
+        q.setFromAxisAngle(new V3(0, 1, 0), rand(0, 6.28));
+        m.compose(p, q, s); im.setMatrixAt(k++, m);
+      }
+    }
+    im.count = k;
+    im.userData.speed = L.speed;
+    scene.add(im);
+    cloudLayers.push(im);
+  }
+}
+
+buildTerrain();
+const water = buildWater();
+buildVegetation();
+buildClouds();
+
+/* =====================================================================
+   Shared textures & effects
+   ===================================================================== */
+function makeGlowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const glowTex = makeGlowTexture();
+const makeGlow = (color, opacity = 0.9) => new THREE.Sprite(new THREE.SpriteMaterial({
+  map: glowTex, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity,
+}));
+
+class Particles {
+  constructor(max) {
+    this.max = max; this.cursor = 0;
+    this.pos = new Float32Array(max * 3);
+    this.col = new Float32Array(max * 4);
+    this.size = new Float32Array(max);
+    this.vel = new Float32Array(max * 3);
+    this.rgb = new Float32Array(max * 3);
+    this.life = new Float32Array(max);
+    this.maxLife = new Float32Array(max);
+    this.s0 = new Float32Array(max);
+    this.drag = new Float32Array(max);
+    this.grav = new Float32Array(max);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('pcolor', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('psize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
+    this.geo = g;
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uScale: { value: 500 } },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute float psize; attribute vec4 pcolor; uniform float uScale; varying vec4 vC;
+        void main() {
+          vC = pcolor;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = psize * uScale / max(-mv.z, 0.1);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        varying vec4 vC;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          float a = smoothstep(0.5, 0.0, d) * vC.a;
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(vC.rgb * a, a);
+        }`,
+    });
+    this.points = new THREE.Points(g, this.mat);
+    this.points.frustumCulled = false;
+    scene.add(this.points);
+  }
+  emit(x, y, z, vx, vy, vz, color, size, life, drag = 1.5, grav = 0) {
+    const i = this.cursor; this.cursor = (i + 1) % this.max;
+    this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
+    this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
+    this.rgb[i * 3] = color.r; this.rgb[i * 3 + 1] = color.g; this.rgb[i * 3 + 2] = color.b;
+    this.life[i] = this.maxLife[i] = life; this.s0[i] = size; this.drag[i] = drag; this.grav[i] = grav;
+  }
+  burst(center, count, color, speed, size, life, spread = 1, grav = 0) {
+    for (let k = 0; k < count; k++) {
+      const u = rand(-1, 1), th = rand(0, Math.PI * 2), r = Math.sqrt(1 - u * u);
+      const sp = speed * rand(0.35, 1);
+      this.emit(center.x, center.y, center.z, r * Math.cos(th) * sp * spread, u * sp, r * Math.sin(th) * sp * spread,
+        color, size * rand(0.6, 1.3), life * rand(0.6, 1.2), 2.2, grav);
+    }
+  }
+  update(dt) {
+    for (let i = 0; i < this.max; i++) {
+      if (this.life[i] <= 0) { this.size[i] = 0; continue; }
+      this.life[i] -= dt;
+      const t = Math.max(this.life[i] / this.maxLife[i], 0);
+      const dr = Math.exp(-this.drag[i] * dt);
+      this.vel[i * 3] *= dr; this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * dr - this.grav[i] * dt; this.vel[i * 3 + 2] *= dr;
+      this.pos[i * 3] += this.vel[i * 3] * dt; this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt; this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
+      this.size[i] = this.s0[i] * (0.35 + 0.65 * t);
+      this.col[i * 4] = this.rgb[i * 3]; this.col[i * 4 + 1] = this.rgb[i * 3 + 1]; this.col[i * 4 + 2] = this.rgb[i * 3 + 2];
+      this.col[i * 4 + 3] = t;
+    }
+    this.geo.attributes.position.needsUpdate = true;
+    this.geo.attributes.pcolor.needsUpdate = true;
+    this.geo.attributes.psize.needsUpdate = true;
+  }
+}
+const particles = new Particles(1800);
+
+// Speed streaks: short lines in the air around the camera, stretched along flight direction.
+const STREAKS = 150;
+const streakPts = Array.from({ length: STREAKS }, () => new V3(1e5, 1e5, 1e5));
+const streakGeo = new THREE.BufferGeometry();
+streakGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(STREAKS * 6), 3).setUsage(THREE.DynamicDrawUsage));
+const streakMat = new THREE.LineBasicMaterial({ color: 0xfff0e0, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const streaks = new THREE.LineSegments(streakGeo, streakMat);
+streaks.frustumCulled = false;
+scene.add(streaks);
+
+// Expanding rings for evolution
+const rings = [];
+function spawnRing(pos, color, maxScale, dur, vertical = false) {
+  const m = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.012, 4, 72),
+    new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+  );
+  m.position.copy(pos);
+  if (!vertical) m.rotation.x = Math.PI / 2; else m.rotation.y = pl.yaw;
+  scene.add(m);
+  rings.push({ m, t: 0, dur, maxScale });
+}
+
+/* =====================================================================
+   Creature models (all face +Z, built at "unit" scale ≈ 6 wingspan)
+   ===================================================================== */
+const mat = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, flatShading: true, roughness: 0.78, metalness: 0.05 }, o));
+
+function triGeo(pts) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts.flat()), 3));
+  g.computeVertexNormals();
+  return g;
+}
+function boneBetween(a, b, r, material) {
+  const len = a.distanceTo(b);
+  const g = new THREE.CylinderGeometry(r * 0.7, r, len, 5);
+  g.translate(0, len / 2, 0);
+  const mesh = new THREE.Mesh(g, material);
+  mesh.position.copy(a);
+  mesh.quaternion.setFromUnitVectors(new V3(0, 1, 0), new V3().subVectors(b, a).normalize());
+  return mesh;
+}
+
+function buildPterosaur(o) {
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  const mats = {
+    body: mat(o.body),
+    belly: mat(o.belly),
+    wing: mat(o.wing, { side: THREE.DoubleSide, emissive: o.wingGlow || 0x000000, emissiveIntensity: o.wingGlow ? 0.35 : 0 }),
+    crest: mat(o.crest, { emissive: o.crestGlow ? o.crest : 0x000000, emissiveIntensity: o.crestGlow || 0 }),
+    beak: mat(o.beak),
+    eye: new THREE.MeshStandardMaterial({ color: 0x140a10, emissive: o.eyeGlow || 0x000000, emissiveIntensity: o.eyeGlow ? 2.5 : 0 }),
+  };
+
+  // Torso — low-poly lathe
+  const prof = [[0.02, -1.0], [0.22, -0.72], [0.37, -0.25], [0.42, 0.2], [0.34, 0.66], [0.2, 0.96], [0.1, 1.06]]
+    .map(p => new THREE.Vector2(p[0], p[1]));
+  const torsoG = new THREE.LatheGeometry(prof, 7); torsoG.rotateX(Math.PI / 2);
+  const torso = new THREE.Mesh(torsoG, mats.body); torso.scale.set(1, 0.82, 1);
+  body.add(torso);
+  const bellyG = new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x * 0.85, v.y * 0.9)), 7, Math.PI * 0.6, Math.PI * 0.8);
+  bellyG.rotateX(Math.PI / 2);
+  const belly = new THREE.Mesh(bellyG, mats.belly); belly.scale.set(1, 0.82, 1); belly.position.y = -0.04;
+  body.add(belly);
+
+  // Neck + head
+  const neckLen = o.neck;
+  const neckG = new THREE.CylinderGeometry(0.1, 0.16, neckLen, 6); neckG.rotateX(Math.PI / 2); neckG.translate(0, 0, neckLen / 2);
+  const neck = new THREE.Mesh(neckG, mats.body);
+  neck.position.set(0, 0.1, 0.9); neck.rotation.x = -0.3;
+  body.add(neck);
+  const head = new THREE.Group();
+  head.position.set(0, 0.1 + Math.sin(0.3) * neckLen, 0.9 + Math.cos(0.3) * neckLen);
+  body.add(head);
+  const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(0.21, 0), mats.body); skull.scale.set(0.95, 1, 1.35);
+  head.add(skull);
+  const bl = o.beakLen;
+  const beakG = new THREE.ConeGeometry(0.12, bl, 5); beakG.rotateX(Math.PI / 2); beakG.translate(0, 0, bl / 2 + 0.12);
+  const beak = new THREE.Mesh(beakG, mats.beak); beak.position.y = 0.03; head.add(beak);
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.06, 0.08); head.add(jaw);
+  const jawG = new THREE.ConeGeometry(0.085, bl * 0.9, 5); jawG.rotateX(Math.PI / 2); jawG.translate(0, 0, bl * 0.45 + 0.05);
+  jaw.add(new THREE.Mesh(jawG, mats.beak));
+  const crest = new THREE.Mesh(triGeo([[0, 0.12, 0.2], [0, 0.14 + o.crestH, -o.crestL], [0, 0.02, -0.18]]),
+    mats.crest.clone());
+  crest.material.side = THREE.DoubleSide;
+  crest.material.emissive = new THREE.Color(o.crestGlow ? o.crest : 0x000000);
+  mats.crestMesh = crest.material;
+  head.add(crest);
+  if (o.beakCrest) {
+    head.add(new THREE.Mesh(triGeo([[0, 0.08, bl * 0.55], [0, 0.08 + o.crestH * 0.45, bl * 0.8], [0, 0.05, bl * 0.95]]), crest.material));
+  }
+  const eyeG = new THREE.IcosahedronGeometry(0.05, 0);
+  for (const s of [1, -1]) { const e = new THREE.Mesh(eyeG, mats.eye); e.position.set(s * 0.15, 0.07, 0.06); head.add(e); }
+
+  // Tail
+  const tl = o.tail;
+  const tailG = new THREE.ConeGeometry(0.09, tl, 5); tailG.rotateX(-Math.PI / 2); tailG.translate(0, 0, -tl / 2);
+  const tail = new THREE.Mesh(tailG, mats.body); tail.position.set(0, 0.02, -0.9); body.add(tail);
+  if (o.vane) {
+    const vane = new THREE.Mesh(triGeo([[0, 0, 0], [0, 0.28, -0.28], [0, 0, -0.56], [0, 0, 0], [0, 0, -0.56], [0, -0.22, -0.28]]), mats.crestMesh);
+    vane.position.set(0, 0.02, -0.9 - tl + 0.1); body.add(vane);
+  }
+  // Legs
+  for (const s of [1, -1]) {
+    const lg = new THREE.ConeGeometry(0.06, 0.7, 4); lg.rotateX(-Math.PI / 2); lg.translate(0, 0, -0.35);
+    const leg = new THREE.Mesh(lg, mats.body); leg.position.set(s * 0.16, -0.12, -0.7); leg.rotation.y = s * 0.15; body.add(leg);
+  }
+
+  // Wings: shoulder (inner membrane) -> elbow (outer membrane, finger bone)
+  const wings = [];
+  for (const s of [1, -1]) {
+    const shoulder = new THREE.Group(); shoulder.position.set(s * 0.25, 0.14, 0.42); body.add(shoulder);
+    const A = new V3(0, 0, 0.05), B = new V3(s * 1.15, 0.03, 0.2), C = new V3(s * 1.05, 0, -0.45), D = new V3(s * 0.02, -0.05, -1.22);
+    shoulder.add(new THREE.Mesh(triGeo([A, B, C, A, C, D].map(v => v.toArray())), mats.wing));
+    shoulder.add(boneBetween(A, B, 0.06, mats.body));
+    const elbow = new THREE.Group(); elbow.position.copy(B); shoulder.add(elbow);
+    const B2 = new V3(0, 0, 0), E = new V3(s * 1.8, 0.0, -0.78), C2 = new V3(-s * 0.1, -0.03, -0.65);
+    elbow.add(new THREE.Mesh(triGeo([B2, E, C2].map(v => v.toArray())), mats.wing));
+    elbow.add(boneBetween(B2, E, 0.045, mats.body));
+    const clawG = new THREE.ConeGeometry(0.04, 0.2, 4); clawG.rotateX(Math.PI / 2);
+    const claw = new THREE.Mesh(clawG, mats.beak); claw.position.set(0, 0, 0.1); elbow.add(claw);
+    wings.push({ shoulder, elbow, s, tip: E.clone() });
+  }
+  return { root, body, head, jaw, wings, mats, type: 'ptero' };
+}
+
+function buildBird(palette) {
+  const root = new THREE.Group(); const body = new THREE.Group(); root.add(body);
+  const mBody = mat(palette[0]), mWing = mat(palette[1], { side: THREE.DoubleSide }), mBeak = mat(0xffc15e);
+  const torso = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), mBody); torso.scale.set(0.75, 0.7, 1.4); body.add(torso);
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), mBody); head.position.set(0, 0.2, 0.75); body.add(head);
+  const bg = new THREE.ConeGeometry(0.1, 0.4, 4); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.2);
+  const beak = new THREE.Mesh(bg, mBeak); beak.position.set(0, 0.17, 1.0); body.add(beak);
+  const tailM = new THREE.Mesh(triGeo([[0, 0.05, -0.55], [0.45, 0, -1.3], [-0.45, 0, -1.3]]), mWing); body.add(tailM);
+  const eyeM = new THREE.MeshStandardMaterial({ color: 0x100808 });
+  for (const s of [1, -1]) { const e = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), eyeM); e.position.set(s * 0.2, 0.28, 0.9); body.add(e); }
+  const wings = [];
+  for (const s of [1, -1]) {
+    const shoulder = new THREE.Group(); shoulder.position.set(s * 0.3, 0.12, 0.15); body.add(shoulder);
+    shoulder.add(new THREE.Mesh(triGeo([[0, 0, 0.3], [s * 1.2, 0, 0.2], [s * 1.1, 0, -0.45], [0, 0, 0.3], [s * 1.1, 0, -0.45], [0, 0, -0.55]]), mWing));
+    const elbow = new THREE.Group(); elbow.position.set(s * 1.2, 0, 0.2); shoulder.add(elbow);
+    elbow.add(new THREE.Mesh(triGeo([[0, 0, 0], [s * 1.5, 0, -0.55], [-s * 0.1, 0, -0.65]]), mWing));
+    wings.push({ shoulder, elbow, s, tip: new V3(s * 1.5, 0, -0.55) });
+  }
+  return { root, body, head, wings, mats: { eye: eyeM }, type: 'bird' };
+}
+
+function buildDragonfly(hue) {
+  const root = new THREE.Group(); const body = new THREE.Group(); root.add(body);
+  const c = new THREE.Color().setHSL(hue, 0.85, 0.5);
+  const mBody = mat(c, { emissive: c, emissiveIntensity: 0.35, metalness: 0.4, roughness: 0.4 });
+  const mWing = new THREE.MeshStandardMaterial({ color: 0xe8fbff, emissive: 0x9fe8ff, emissiveIntensity: 0.4, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const abdG = new THREE.CylinderGeometry(0.1, 0.05, 2.6, 5); abdG.rotateX(Math.PI / 2); abdG.translate(0, 0, -1.3);
+  body.add(new THREE.Mesh(abdG, mBody));
+  const thorax = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 0), mBody); thorax.scale.set(1, 1, 1.4); thorax.position.z = 0.15; body.add(thorax);
+  const eyeM = mat(0x1a2a3a, { metalness: 0.6, roughness: 0.3 });
+  for (const s of [1, -1]) { const e = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), eyeM); e.position.set(s * 0.15, 0.05, 0.55); body.add(e); }
+  const wingG = triGeo([[0, 0, 0.12], [0.6, 0, 0.18], [2.6, 0, 0.02], [0, 0, 0.12], [2.6, 0, 0.02], [0.5, 0, -0.2]]);
+  const wings = [];
+  for (const s of [1, -1]) for (const zOff of [0.3, -0.05]) {
+    const shoulder = new THREE.Group(); shoulder.position.set(0, 0.2, zOff); body.add(shoulder);
+    const w = new THREE.Mesh(wingG, mWing); w.scale.x = s; shoulder.add(w);
+    wings.push({ shoulder, elbow: null, s, tip: new V3(s * 2.6, 0, 0) });
+  }
+  return { root, body, wings, mats: {}, type: 'fly' };
+}
+
+function animateWings(model, phase, amp, fold = 0) {
+  if (model.type === 'fly') {
+    model.wings.forEach((w, i) => { w.shoulder.rotation.z = w.s * Math.sin(phase * 3 + i * 1.3) * 0.55; });
+    return;
+  }
+  for (const w of model.wings) {
+    const a = Math.sin(phase) * amp;
+    w.shoulder.rotation.z = w.s * (a + 0.06);
+    w.shoulder.rotation.y = w.s * fold * 0.55;
+    if (w.elbow) {
+      w.elbow.rotation.z = w.s * (Math.sin(phase - 0.7) * amp * 0.75 - fold * 0.25);
+      w.elbow.rotation.y = w.s * fold * 1.1;
+    }
+  }
+}
+
+/* =====================================================================
+   Evolution ranks & species
+   ===================================================================== */
+const RANKS = [
+  { name: 'Птенец', icon: '🥚', size: 1.0, speed: 26, turn: 1.75, xp: 12,
+    look: { body: 0xe9cfa6, belly: 0xfff0d8, wing: 0xf0a07a, crest: 0xff8c5a, beak: 0xffe2b0, neck: 0.4, beakLen: 1.0, crestH: 0.1, crestL: 0.3, tail: 0.9 } },
+  { name: 'Молодой ящер', icon: '🦎', size: 1.9, speed: 32, turn: 1.6, xp: 32, aura: 0xffa04a,
+    look: { body: 0xd9774a, belly: 0xf5d6b0, wing: 0xb8483a, crest: 0xffc247, beak: 0xffe6b8, neck: 0.5, beakLen: 1.3, crestH: 0.3, crestL: 0.65, tail: 0.75, crestGlow: 0.35 } },
+  { name: 'Взрослый птерозавр', icon: '🦅', size: 3.3, speed: 39, turn: 1.45, xp: 60, aura: 0xffc860, trail: 0xffc860,
+    look: { body: 0x8c2d3e, belly: 0xe9b98f, wing: 0x5e1c3d, crest: 0xffc53d, beak: 0xffe8c4, neck: 0.6, beakLen: 1.6, crestH: 0.5, crestL: 1.0, tail: 0.6, beakCrest: true, crestGlow: 0.9 } },
+  { name: 'Апекс-хищник', icon: '👑', size: 5.0, speed: 46, turn: 1.35, xp: Infinity, aura: 0xff4fd8, trail: 0x6ff7ff,
+    look: { body: 0x2c2140, belly: 0x6b5a8f, wing: 0x3a1d5e, crest: 0x62f4ff, beak: 0xe6e0ff, neck: 0.7, beakLen: 1.9, crestH: 0.85, crestL: 1.35, tail: 0.6, beakCrest: true, crestGlow: 1.6, wingGlow: 0xff3fd0, eyeGlow: 0x62f4ff } },
+];
+
+const SPECIES = {
+  dragonfly: { name: 'Стрекоза', size: 0.35, speed: 13, xp: 1, heal: 2, alt: [5, 40], erratic: true,
+    build: () => buildDragonfly(pick([0.5, 0.45, 0.8, 0.12])), feather: 0x9ff3ff },
+  bird: { name: 'Протоптица', size: 0.7, speed: 17, xp: 2, heal: 3, alt: [15, 100],
+    build: () => buildBird(pick([[0x3fa7c9, 0x2c6f9e], [0xf2c14e, 0xd9822b], [0x9b6ad1, 0x5c3c9e], [0x5fc486, 0x2e8f67]])), feather: 0xffe08a },
+  rhampho: { name: 'Рамфоринх', size: 1.4, speed: 23, xp: 4, heal: 5, alt: [25, 150],
+    build: () => buildPterosaur({ body: 0x6f8f5a, belly: 0xd8c9a0, wing: 0x8a5a3c, crest: 0xc4492f, beak: 0xe8d9b5, neck: 0.35, beakLen: 0.9, crestH: 0.12, crestL: 0.3, tail: 2.0, vane: true }), feather: 0xb5e37a },
+  ornitho: { name: 'Орнитохейр', size: 2.7, speed: 29, xp: 6, heal: 8, alt: [40, 210],
+    build: () => buildPterosaur({ body: 0x4b6a8a, belly: 0xe6d7c3, wing: 0x2f4a6b, crest: 0xe8a33c, beak: 0xf0e0c0, neck: 0.5, beakLen: 1.5, crestH: 0.28, crestL: 0.6, tail: 0.5, beakCrest: true }), feather: 0x8ec5ff },
+  quetz: { name: 'Кетцалькоатль', size: 4.3, speed: 34, xp: 10, heal: 12, alt: [50, 250],
+    build: () => buildPterosaur({ body: 0x5b4d63, belly: 0xd9c7b6, wing: 0x3e2e48, crest: 0xd9462e, beak: 0xf2d88a, neck: 1.3, beakLen: 1.9, crestH: 0.55, crestL: 0.9, tail: 0.35 }), feather: 0xff9b7a },
+};
+// Population per rank — yesterday's predator becomes today's prey.
+const SPAWN = [
+  { dragonfly: 22, bird: 12, rhampho: 3 },
+  { dragonfly: 6, bird: 12, rhampho: 11, ornitho: 3 },
+  { bird: 6, rhampho: 12, ornitho: 10, quetz: 3 },
+  { rhampho: 8, ornitho: 12, quetz: 10 },
+];
+
+/* =====================================================================
+   Game state & player
+   ===================================================================== */
+const state = { rank: 0, xp: 0, hp: 100, maxHp: 100, eaten: 0, score: 0, time: 0, over: false, paused: false,
+  slow: 0, shake: 0, lastHit: -99, hintT: 8, hunted: false, deathReason: '' };
+const rank = () => RANKS[state.rank];
+
+const pl = {
+  pos: new V3(), vel: new V3(), kb: new V3(), fwd: new V3(0, 0, 1),
+  yaw: 0.25, pitch: 0.05, roll: 0, pitchVel: 0, yawVel: 0,
+  speed: 26, vy: 0, flapCd: 0, flapKick: 0, dashT: 0, dashCd: 0, invuln: 0,
+  visSize: 1, phase: 0, jaw: 0, groundCd: 0, model: null, aura: null, deathT: 0,
+};
+{
+  const sx = -120, sz = -700;
+  pl.pos.set(sx, groundAt(sx, sz) + 70, sz);
+}
+
+function setPlayerModel() {
+  const R = rank();
+  if (pl.model) scene.remove(pl.model.root);
+  pl.model = buildPterosaur(R.look);
+  scene.add(pl.model.root);
+  pl.aura = null;
+  if (R.aura) {
+    pl.aura = makeGlow(R.aura, 0.35);
+    pl.aura.scale.setScalar(7);
+    pl.model.root.add(pl.aura);
+  }
+}
+setPlayerModel();
+
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 20), new THREE.MeshBasicMaterial({
+  color: 0x1a0a20, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, fog: true,
+}));
+shadow.rotation.x = -Math.PI / 2;
+scene.add(shadow);
+
+/* =====================================================================
+   Creatures
+   ===================================================================== */
+const creatures = [];
+const tmpV = new V3(), tmpV2 = new V3(), tmpV3 = new V3();
+
+function spawnCreature(key, near = false) {
+  const sp = SPECIES[key];
+  const model = sp.build();
+  model.root.scale.setScalar(sp.size);
+  const marker = makeGlow(0xffd36b, 0.8);
+  model.root.add(marker);
+  const isPredatorNow = sp.size > rank().size;
+  const minD = near ? 60 : (isPredatorNow ? 380 : 180);
+  const maxD = near ? 170 : 560;
+  const ang = pl.yaw + rand(-1.7, 1.7);
+  const d = rand(minD, maxD);
+  let x = pl.pos.x + Math.sin(ang) * d, z = pl.pos.z + Math.cos(ang) * d;
+  const rr = Math.hypot(x, z);
+  if (rr > WORLD_R * 0.95) { x *= WORLD_R * 0.9 / rr; z *= WORLD_R * 0.9 / rr; }
+  const homeAlt = rand(sp.alt[0], sp.alt[1]);
+  const y = groundAt(x, z) + homeAlt;
+  const c = {
+    key, sp, model, marker,
+    pos: new V3(x, y, z), dir: new V3(),
+    yaw: rand(0, Math.PI * 2), pitch: 0, bank: 0, yawRate: 0,
+    wYaw: 0, wT: 0, homeAlt, phase: rand(0, 10),
+    chasing: false, chaseT: 0, rest: 0, edible: false, danger: false, dead: false,
+  };
+  scene.add(model.root);
+  creatures.push(c);
+  return c;
+}
+function removeCreature(c) {
+  c.dead = true;
+  scene.remove(c.model.root);
+  c.model.root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material && o.material.map !== glowTex) o.material.dispose();
+  });
+}
+
+function manageSpawns(initial = false) {
+  const table = SPAWN[state.rank];
+  const counts = {};
+  for (const c of creatures) counts[c.key] = (counts[c.key] || 0) + 1;
+  let budget = initial ? 999 : 3;
+  for (const key in table) {
+    while ((counts[key] || 0) < table[key] && budget-- > 0) {
+      spawnCreature(key, initial && (key === 'dragonfly' || key === 'bird') && Math.random() < 0.35);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  // Retire surplus species far away from the player (out of sight in the fog)
+  for (const c of creatures) {
+    const want = table[c.key] || 0;
+    if ((counts[c.key] || 0) > want && c.pos.distanceTo(pl.pos) > 480) {
+      removeCreature(c); counts[c.key]--;
+    }
+  }
+  for (let i = creatures.length - 1; i >= 0; i--) if (creatures[i].dead) creatures.splice(i, 1);
+}
+
+const GOLD = new THREE.Color(0xffd36b), RED = new THREE.Color(0xff2a3a);
+function updateCreature(c, dt) {
+  const sp = c.sp, R = rank();
+  c.phase += dt;
+  const toP = tmpV.subVectors(pl.pos, c.pos);
+  const d = toP.length();
+  c.edible = sp.size < R.size;
+  c.danger = sp.size > R.size && !state.over;
+
+  let desiredYaw = null, desiredPitch = null;
+  let speed = sp.speed, turn = 1.4;
+
+  // Wander
+  c.wT -= dt;
+  if (c.wT <= 0) { c.wT = sp.erratic ? rand(0.3, 1.2) : rand(1.5, 4); c.wYaw = rand(-1, 1) * (sp.erratic ? 2.2 : 0.7); }
+  c.yawRate = damp(c.yawRate, c.wYaw, 2, dt);
+
+  if (c.danger) {
+    if (c.rest > 0) {
+      c.rest -= dt;
+      if (d < 200) { desiredYaw = Math.atan2(-toP.x, -toP.z); }
+    } else if (c.chasing || d < 230) {
+      if (!c.chasing) { c.chasing = true; c.chaseT = 0; }
+      c.chaseT += dt;
+      const lead = Math.min(d / 45, 1.3);
+      const tgt = tmpV2.copy(pl.pos).addScaledVector(pl.vel, lead).sub(c.pos);
+      desiredYaw = Math.atan2(tgt.x, tgt.z);
+      desiredPitch = clamp(-Math.asin(clamp(tgt.y / (tgt.length() || 1), -1, 1)), -0.8, 0.8);
+      // lunge when close — the player must react (dash / dive / turn) to escape
+      speed = sp.speed * (d < 30 * R.size ? 1.6 : 1.35); turn = 2.3;
+      if (c.chaseT > 7.5 || d > 420) { c.chasing = false; c.rest = 5; }
+      if (d < (R.size + sp.size) * 1.35 && pl.invuln <= 0) { hitPlayer(c); c.chasing = false; c.rest = 4.5; }
+    }
+  } else {
+    c.chasing = false;
+    const fleeR = 26 + R.size * 11;
+    if (c.edible && d < fleeR) {
+      const away = Math.atan2(-toP.x, -toP.z);
+      desiredYaw = away + Math.sin(c.phase * 3) * 0.6;
+      desiredPitch = toP.y > 0 ? 0.25 : -0.25;
+      speed = Math.min(sp.speed * 1.35, R.speed * 0.8); turn = 2.6;
+    }
+  }
+
+  // Keep inside the world
+  const rr = Math.hypot(c.pos.x, c.pos.z);
+  if (rr > WORLD_R * 0.92) desiredYaw = Math.atan2(-c.pos.x, -c.pos.z);
+
+  if (desiredYaw !== null) {
+    const diff = angleDiff(desiredYaw, c.yaw);
+    c.yawRate = damp(c.yawRate, clamp(diff * 3, -turn, turn), 6, dt);
+  }
+  c.yaw += c.yawRate * dt;
+
+  // Altitude keeping (look ahead for slopes)
+  dirFrom(c.yaw, 0, tmpV3);
+  const gAhead = Math.max(groundAt(c.pos.x + tmpV3.x * 25, c.pos.z + tmpV3.z * 25), groundAt(c.pos.x, c.pos.z));
+  if (desiredPitch === null) {
+    desiredPitch = clamp(-(gAhead + c.homeAlt - c.pos.y) * 0.03, -0.45, 0.45);
+    if (sp.erratic) desiredPitch += Math.sin(c.phase * 2.3) * 0.3;
+  }
+  const minY = gAhead + 3 + sp.size * 2;
+  if (c.pos.y < minY + 6) desiredPitch = Math.min(desiredPitch, -0.4);
+  if (c.pos.y > CEILING - 40) desiredPitch = Math.max(desiredPitch, 0.3);
+  c.pitch = damp(c.pitch, desiredPitch, 3, dt);
+
+  dirFrom(c.yaw, c.pitch, c.dir);
+  const spd = sp.erratic ? speed * (0.7 + 0.5 * Math.abs(Math.sin(c.phase * 1.7))) : speed;
+  c.pos.addScaledVector(c.dir, spd * dt);
+  c.pos.y = Math.max(c.pos.y, groundAt(c.pos.x, c.pos.z) + 2 + sp.size);
+
+  // Visuals
+  c.bank = damp(c.bank, clamp(-c.yawRate * 0.45, -0.9, 0.9), 4, dt);
+  c.model.root.position.copy(c.pos);
+  c.model.root.rotation.set(c.pitch, c.yaw, c.bank, 'YXZ');
+  const flapSpeed = c.model.type === 'fly' ? 40 : (c.chasing ? 9 : 5.5 + (c.edible && d < 60 ? 4 : 0));
+  const amp = c.model.type === 'fly' ? 1 : (c.pitch < -0.1 || c.chasing ? 0.75 : 0.45);
+  animateWings(c.model, c.phase * flapSpeed, amp, 0);
+
+  // Relation marker: golden glow = food, red glow on the head = danger
+  const m = c.marker;
+  if (c.edible) {
+    m.visible = true; m.material.color.copy(GOLD);
+    m.position.set(0, 0, 0.2);
+    m.scale.setScalar(4 + Math.sin(c.phase * 4) * 0.6);
+    m.material.opacity = 0.75;
+  } else if (c.danger) {
+    m.visible = true; m.material.color.copy(RED);
+    if (c.model.head) m.position.copy(c.model.head.position);
+    m.scale.setScalar(c.chasing ? 2.4 + Math.sin(c.phase * 12) * 0.6 : 1.6);
+    m.material.opacity = c.chasing ? 1 : 0.7;
+  } else m.visible = false;
+  if (c.model.mats.eye && c.model.type === 'ptero') {
+    c.model.mats.eye.emissive.setHex(c.danger ? 0xff1a1a : 0x000000);
+    c.model.mats.eye.emissiveIntensity = c.danger ? 3 : 0;
+  }
+  if (c.model.jaw) c.model.jaw.rotation.x = damp(c.model.jaw.rotation.x, c.chasing && d < 60 ? 0.5 : 0, 8, dt);
+
+  if (d > 800) removeCreature(c);
+}
+
+/* =====================================================================
+   Input
+   ===================================================================== */
+const keys = {};
+const isDown = (...codes) => codes.some(c => keys[c]);
+addEventListener('keydown', e => {
+  SFX.init();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.repeat) { keys[e.code] = true; return; }
+  keys[e.code] = true;
+  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyM') SFX.toggleMute();
+  if (e.code === 'KeyH') { state.hintT = 6; hud.hint.classList.remove('hide'); }
+  if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !state.paused) tryDash();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (!state.over && !state.paused) togglePause(); });
+addEventListener('pointerdown', () => SFX.init());
+
+function togglePause() {
+  if (state.over) return;
+  state.paused = !state.paused;
+  document.getElementById('pause').classList.toggle('show', state.paused);
+  if (state.paused) SFX.setWind(0);
+}
+
+/* =====================================================================
+   Audio (tiny synth, starts on first key press)
+   ===================================================================== */
+const SFX = {
+  ctx: null, out: null, muted: false, windG: null, windF: null, noiseBuf: null,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.out = this.ctx.createGain(); this.out.gain.value = 0.5; this.out.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate * 2;
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+      this.windF = this.ctx.createBiquadFilter(); this.windF.type = 'lowpass'; this.windF.frequency.value = 400;
+      this.windG = this.ctx.createGain(); this.windG.gain.value = 0;
+      src.connect(this.windF).connect(this.windG).connect(this.out); src.start();
+    } catch (e) { this.ctx = null; }
+  },
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.out) this.out.gain.value = this.muted ? 0 : 0.5;
+    toast(this.muted ? 'Звук выключен' : 'Звук включён');
+  },
+  tone(f0, f1, dur, type = 'sine', vol = 0.2, delay = 0) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.out); o.start(t); o.stop(t + dur + 0.05);
+  },
+  noise(dur, freq, vol, type = 'bandpass', q = 1) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f).connect(g).connect(this.out); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  },
+  flap() { this.noise(0.22, 380, 0.16, 'lowpass'); },
+  eat() { this.tone(520, 1100, 0.12, 'triangle', 0.16); this.tone(880, 1760, 0.1, 'sine', 0.08, 0.05); },
+  hit() { this.noise(0.4, 260, 0.45, 'lowpass'); this.tone(150, 45, 0.4, 'sawtooth', 0.16); },
+  dash() { this.noise(0.55, 1100, 0.22, 'bandpass', 0.7); },
+  evolve() {
+    [0, 4, 7, 12, 16, 19].forEach((n, i) => this.tone(220 * 2 ** (n / 12), 220 * 2 ** (n / 12) * 1.005, 1.1, 'triangle', 0.11, i * 0.08));
+    this.noise(1.4, 1500, 0.14, 'bandpass', 0.5);
+  },
+  over() { [0, -3, -7, -12].forEach((n, i) => this.tone(330 * 2 ** (n / 12), 330 * 2 ** (n / 12) * 0.97, 0.6, 'triangle', 0.12, i * 0.18)); },
+  setWind(v) {
+    if (!this.ctx || !this.windG) return;
+    const t = this.ctx.currentTime;
+    this.windG.gain.setTargetAtTime(this.muted ? 0 : v * 0.22, t, 0.25);
+    this.windF.frequency.setTargetAtTime(250 + v * 1500, t, 0.25);
+  },
+};
+
+/* =====================================================================
+   HUD
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const hud = {
+  rankIdx: $('rankIdx'), rankName: $('rankName'), rankIcon: $('rankIcon'), pips: $('pips').children,
+  xpText: $('xpText'), xpBar: $('xpBar'), eaten: $('eaten'), score: $('score'),
+  alt: $('altValue'), agl: $('agl'), spd: $('spd'), altBar: $('altBar'),
+  hpText: $('hpText'), hpBar: $('hpBar'), dashBar: $('dashBar'), healthPanel: $('healthPanel'),
+  warn: $('warn'), edge: $('edgeMsg'), hint: $('hint'), banner: $('banner'), bannerRank: $('bannerRank'), bannerSub: $('bannerSub'),
+  toasts: $('toasts'), flash: $('flash'), vignette: $('vignette'),
+};
+const radar = $('radar'), rctx = radar.getContext('2d');
+
+function toast(text, bad = false) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (bad ? ' bad' : '');
+  el.textContent = text;
+  el.style.top = (hud.toasts.childElementCount * -26) + 'px';
+  hud.toasts.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+function flash(el, peak, dur) {
+  el.style.transition = 'none'; el.style.opacity = peak;
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = `opacity ${dur}s ease-out`; el.style.opacity = 0; }));
+}
+
+function refreshRankHud() {
+  const R = rank();
+  hud.rankIdx.textContent = state.rank + 1;
+  hud.rankName.textContent = R.name;
+  hud.rankIcon.textContent = R.icon;
+  [...hud.pips].forEach((p, i) => p.classList.toggle('on', i <= state.rank));
+}
+
+let hudTick = 0;
+function updateHud(dt) {
+  const R = rank();
+  const xpFrac = R.xp === Infinity ? 1 : state.xp / R.xp;
+  hud.xpBar.style.width = (xpFrac * 100).toFixed(1) + '%';
+  hud.hpBar.style.width = (state.hp / state.maxHp * 100).toFixed(1) + '%';
+  hud.dashBar.style.width = ((1 - clamp(pl.dashCd / 2.2, 0, 1)) * 100).toFixed(1) + '%';
+  hudTick -= dt;
+  if (hudTick <= 0) {
+    hudTick = 0.1;
+    hud.xpText.textContent = R.xp === Infinity ? 'МАКС · вершина пищевой цепи' : `${state.xp} / ${R.xp}`;
+    hud.eaten.textContent = state.eaten;
+    hud.score.textContent = state.score;
+    const altM = Math.max(0, Math.round(pl.pos.y * 1.5));
+    hud.alt.innerHTML = `${altM}<small> м</small>`;
+    hud.agl.textContent = Math.max(0, Math.round((pl.pos.y - groundAt(pl.pos.x, pl.pos.z)) * 1.5));
+    hud.spd.textContent = Math.round(pl.speed * 3.6 * 1.5);
+    hud.altBar.style.width = clamp(pl.pos.y / CEILING * 100, 0, 100) + '%';
+    hud.hpText.textContent = Math.ceil(state.hp);
+    hud.warn.classList.toggle('on', state.hunted);
+    hud.edge.classList.toggle('on', Math.hypot(pl.pos.x, pl.pos.z) > WORLD_R);
+    drawRadar();
+  }
+  if (state.hintT > 0) { state.hintT -= dt; if (state.hintT <= 0) hud.hint.classList.add('hide'); }
+}
+
+function drawRadar() {
+  const W = radar.width, C = W / 2, RANGE = 480, k = (C - 8) / RANGE;
+  rctx.clearRect(0, 0, W, W);
+  rctx.save();
+  rctx.beginPath(); rctx.arc(C, C, C - 2, 0, Math.PI * 2); rctx.clip();
+  const bg = rctx.createRadialGradient(C, C, 0, C, C, C);
+  bg.addColorStop(0, 'rgba(255,180,140,0.10)'); bg.addColorStop(1, 'rgba(255,120,160,0.04)');
+  rctx.fillStyle = bg; rctx.fillRect(0, 0, W, W);
+  rctx.strokeStyle = 'rgba(255,230,210,0.16)'; rctx.lineWidth = 2;
+  for (const r of [0.33, 0.66, 1]) { rctx.beginPath(); rctx.arc(C, C, (C - 8) * r, 0, Math.PI * 2); rctx.stroke(); }
+  rctx.beginPath(); rctx.moveTo(C, 8); rctx.lineTo(C, W - 8); rctx.moveTo(8, C); rctx.lineTo(W - 8, C); rctx.stroke();
+  // forward = up; right vector of player in world = (-cos yaw, sin yaw)
+  const fx = Math.sin(pl.yaw), fz = Math.cos(pl.yaw), rx = -Math.cos(pl.yaw), rz = Math.sin(pl.yaw);
+  const t = performance.now() / 1000;
+  for (const c of creatures) {
+    const dx = c.pos.x - pl.pos.x, dz = c.pos.z - pl.pos.z;
+    const sx = (dx * rx + dz * rz) * k, sy = (dx * fx + dz * fz) * k;
+    if (sx * sx + sy * sy > (C - 6) ** 2) continue;
+    const r = 3 + c.sp.size * 2.2;
+    rctx.beginPath(); rctx.arc(C + sx, C - sy, r, 0, Math.PI * 2);
+    if (c.edible) rctx.fillStyle = 'rgba(255, 214, 107, 0.95)';
+    else if (c.danger) rctx.fillStyle = c.chasing ? `rgba(255, 50, 70, ${0.6 + 0.4 * Math.sin(t * 12)})` : 'rgba(255, 70, 90, 0.8)';
+    else rctx.fillStyle = 'rgba(220, 220, 240, 0.6)';
+    rctx.fill();
+  }
+  // player
+  rctx.fillStyle = '#fff';
+  rctx.beginPath(); rctx.moveTo(C, C - 11); rctx.lineTo(C + 8, C + 8); rctx.lineTo(C, C + 3); rctx.lineTo(C - 8, C + 8); rctx.closePath(); rctx.fill();
+  rctx.restore();
+}
+
+/* =====================================================================
+   Gameplay events
+   ===================================================================== */
+function tryDash() {
+  if (state.over || pl.dashCd > 0) return;
+  pl.dashT = 0.75; pl.dashCd = 2.2;
+  pl.speed += rank().speed * 0.45;
+  SFX.dash();
+  state.shake = Math.max(state.shake, 0.25);
+}
+
+function damagePlayer(amount, reason) {
+  if (state.over) return;
+  state.hp = Math.max(0, state.hp - amount);
+  state.lastHit = state.time;
+  hud.healthPanel.classList.remove('hurt'); void hud.healthPanel.offsetWidth; hud.healthPanel.classList.add('hurt');
+  flash(hud.vignette, 1, 0.9);
+  toast(`−${Math.round(amount)} ${reason}`, true);
+  if (state.hp <= 0) gameOver(reason);
+}
+
+function hitPlayer(c) {
+  const R = rank();
+  const dmg = clamp(14 + 14 * (c.sp.size / R.size - 1), 10, 36);
+  const away = tmpV2.subVectors(pl.pos, c.pos).normalize();
+  pl.kb.copy(away).multiplyScalar(32).add(new V3(0, 9, 0));
+  pl.yawVel += (Math.random() < 0.5 ? -1 : 1) * 2.5;
+  pl.pitch -= 0.3;
+  pl.speed *= 0.6;
+  pl.invuln = 1.5;
+  state.shake = 0.9;
+  particles.burst(pl.pos, 40, new THREE.Color(1, 0.25, 0.3), 26 * R.size, 1.2 * R.size, 0.8);
+  SFX.hit();
+  damagePlayer(dmg, `удар: ${c.sp.name}`);
+}
+
+function eatCreature(c) {
+  const R = rank();
+  state.eaten++;
+  const gained = state.rank < 3 ? c.sp.xp : 0;
+  state.score += Math.round(c.sp.xp * 10 * (1 + state.rank * 0.5));
+  state.hp = Math.min(state.maxHp, state.hp + c.sp.heal);
+  const col = new THREE.Color(c.sp.feather);
+  particles.burst(c.pos, 26 + c.sp.size * 10, col, 14 * Math.max(c.sp.size, 0.6), 0.9 * Math.max(c.sp.size, 0.5), 0.9, 1, 6);
+  particles.burst(c.pos, 12, new THREE.Color(1, 0.85, 0.5), 8, 1.6 * Math.max(c.sp.size, 0.6), 0.5);
+  pl.jaw = -0.4;
+  SFX.eat();
+  toast(gained ? `+${gained} опыта · ${c.sp.name}` : `+${Math.round(c.sp.xp * 10 * (1 + state.rank * 0.5))} очков · ${c.sp.name}`);
+  removeCreature(c);
+  if (state.rank < 3) {
+    state.xp += gained;
+    if (state.xp >= R.xp) { state.xp -= R.xp; evolve(); }
+  }
+}
+
+function evolve() {
+  state.rank++;
+  const R = rank();
+  if (state.rank >= 3) state.xp = 0;
+  state.hp = state.maxHp;
+  pl.invuln = 3;
+  state.slow = 1.1;
+  setPlayerModel();
+  pl.model.root.scale.setScalar(pl.visSize);
+  refreshRankHud();
+  const c1 = new THREE.Color(R.aura || 0xffc860), c2 = new THREE.Color(R.trail || 0xff7aa8);
+  particles.burst(pl.pos, 170, c1, 22 * R.size, 0.9 * R.size, 1.5);
+  particles.burst(pl.pos, 110, c2, 14 * R.size, 0.6 * R.size, 1.9);
+  spawnRing(pl.pos, R.aura || 0xffc860, 22 * R.size, 1.3);
+  spawnRing(pl.pos, R.trail || 0xff7aa8, 15 * R.size, 1.0, true);
+  flash(hud.flash, 0.7, 1.2);
+  hud.bannerRank.textContent = R.name;
+  hud.bannerSub.textContent = state.rank === 3
+    ? 'Ты — вершина пищевой цепи. Небо принадлежит тебе.'
+    : 'Бывшие хищники теперь твоя добыча — но в небе появились новые';
+  state.hintT = 0; hud.hint.classList.add('hide');
+  hudTick = 0;
+  hud.banner.classList.add('on');
+  setTimeout(() => hud.banner.classList.remove('on'), 3200);
+  SFX.evolve();
+  // bring the new predators in gradually
+  for (const c of creatures) if (c.sp.size > R.size) c.rest = 3;
+}
+
+function gameOver(reason) {
+  state.over = true;
+  state.deathReason = reason;
+  pl.deathT = 0;
+  SFX.over(); SFX.setWind(0);
+  let best = 0;
+  try { best = Math.max(+localStorage.getItem('ptero-best') || 0, state.score); localStorage.setItem('ptero-best', best); } catch (e) { best = state.score; }
+  setTimeout(() => {
+    $('goReason').textContent = reason.startsWith('удар') ? `Тебя настиг хищник (${reason.replace('удар: ', '')})` : 'Ящер разбился о землю';
+    $('goRank').textContent = `${rank().icon} ${rank().name}`;
+    $('goEaten').textContent = state.eaten;
+    $('goScore').textContent = state.score;
+    const s = Math.floor(state.time);
+    $('goTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    $('goBest').textContent = best;
+    $('gameover').classList.add('show');
+  }, 1600);
+}
+$('restart').addEventListener('click', () => location.reload());
+
+/* =====================================================================
+   Player flight
+   ===================================================================== */
+function updatePlayer(dt) {
+  const R = rank();
+  const m = pl.model;
+
+  if (state.over) {
+    // tumble down
+    pl.deathT += dt;
+    pl.vy -= 30 * dt;
+    pl.roll += dt * 4;
+    pl.pitch = damp(pl.pitch, 1.1, 2, dt);
+    dirFrom(pl.yaw, pl.pitch, pl.fwd);
+    pl.pos.addScaledVector(pl.fwd, pl.speed * 0.4 * dt); pl.pos.y += pl.vy * dt;
+    pl.pos.y = Math.max(pl.pos.y, groundAt(pl.pos.x, pl.pos.z) + 0.8 * pl.visSize);
+    m.root.position.copy(pl.pos);
+    m.root.rotation.set(pl.pitch, pl.yaw, pl.roll, 'YXZ');
+    animateWings(m, pl.phase += dt * 3, 0.2, 0.6);
+    return;
+  }
+
+  const inP = (isDown('KeyW', 'ArrowUp') ? 1 : 0) - (isDown('KeyS', 'ArrowDown') ? 1 : 0);
+  const inT = (isDown('KeyA', 'ArrowLeft') ? 1 : 0) - (isDown('KeyD', 'ArrowRight') ? 1 : 0);
+  const flapping = isDown('Space');
+
+  // Pitch with inertia; gentle auto-leveling
+  pl.pitchVel = damp(pl.pitchVel, inP * 1.45, 5, dt);
+  pl.pitch += pl.pitchVel * dt;
+  if (!inP && pl.dashT <= 0) pl.pitch = damp(pl.pitch, 0.05, 0.9, dt);
+  if (pl.dashT > 0) pl.pitch = damp(pl.pitch, Math.max(pl.pitch, 0.42), 4, dt);
+  // stall: too slow while climbing -> nose drops
+  if (pl.speed < R.speed * 0.62 && pl.pitch < 0) pl.pitch = damp(pl.pitch, 0.25, 1.5, dt);
+  pl.pitch = clamp(pl.pitch, -1.05, 1.2);
+
+  // Roll/yaw with inertia
+  pl.roll = damp(pl.roll, -inT * 0.9 + Math.sin(state.time * 1.3) * 0.03, 3.5, dt);
+  pl.yawVel = damp(pl.yawVel, inT * R.turn, 2.8, dt);
+
+  // Soft world boundary — steer home inside the fog
+  const r = Math.hypot(pl.pos.x, pl.pos.z);
+  if (r > WORLD_R) {
+    const f = smoothstep(WORLD_R, WORLD_R + 350, r);
+    const home = Math.atan2(-pl.pos.x, -pl.pos.z);
+    pl.yawVel += angleDiff(home, pl.yaw) * f * 3 * dt;
+  }
+  pl.yaw += pl.yawVel * dt;
+
+  // Speed: gravity along the flight path + drag to cruise
+  pl.speed += Math.sin(pl.pitch) * 24 * dt;
+  pl.speed = damp(pl.speed, R.speed, 0.4, dt);
+  const altFactor = 1 - smoothstep(CEILING - 140, CEILING, pl.pos.y);
+  pl.flapCd -= dt;
+  if (flapping && pl.flapCd <= 0) {
+    pl.flapCd = 0.33;
+    pl.vy += 7.5 * altFactor;
+    pl.speed += 3.2;
+    pl.flapKick = 1;
+    SFX.flap();
+    particles.burst(tmpV3.copy(pl.pos).addScaledVector(pl.fwd, -1.5 * pl.visSize), 6, new THREE.Color(1, 0.9, 0.8), 6 * pl.visSize, 0.5 * pl.visSize, 0.5);
+  }
+  pl.dashCd = Math.max(0, pl.dashCd - dt);
+  if (pl.dashT > 0) {
+    pl.dashT -= dt;
+    pl.speed += 50 * dt;
+    if (Math.random() < 0.8) particles.emit(pl.pos.x, pl.pos.y, pl.pos.z, rand(-2, 2), rand(-2, 2), rand(-2, 2),
+      new THREE.Color(0.6, 0.8, 1), 1.2 * pl.visSize, 0.5, 3);
+  }
+  pl.speed = clamp(pl.speed, R.speed * 0.45, R.speed * 2.5);
+
+  // Vertical: glide sink + flap lift
+  pl.vy = damp(pl.vy, -1.6, 1.3, dt);
+  if (pl.pos.y > CEILING) pl.vy = Math.min(pl.vy, -2);
+
+  dirFrom(pl.yaw, pl.pitch, pl.fwd);
+  pl.vel.copy(pl.fwd).multiplyScalar(pl.speed);
+  pl.vel.y += pl.vy;
+  pl.vel.add(pl.kb);
+  pl.pos.addScaledVector(pl.vel, dt);
+  pl.kb.multiplyScalar(Math.exp(-2.8 * dt));
+  if (pl.pos.y > CEILING) pl.pitch = damp(pl.pitch, 0.25, 1.5, dt);
+
+  // Ground
+  const gh = groundAt(pl.pos.x, pl.pos.z);
+  const minY = gh + 1.3 * pl.visSize;
+  pl.groundCd -= dt;
+  if (pl.pos.y < minY) {
+    const impact = -pl.vel.y;
+    pl.pos.y = minY;
+    if (pl.vy < 0) pl.vy = 0;
+    pl.vy += 3;
+    if (pl.pitch > -0.1) pl.pitch = -0.1;
+    if (impact > 26 && pl.groundCd <= 0) {
+      pl.groundCd = 1.2; pl.speed *= 0.6; state.shake = 0.6;
+      particles.burst(pl.pos, 30, new THREE.Color(0.9, 0.7, 0.5), 18, 1.5 * pl.visSize, 0.8, 1, 10);
+      damagePlayer(Math.min(14, impact * 0.3), 'удар о землю');
+    }
+  }
+
+  // Timers & visuals
+  pl.invuln -= dt;
+  pl.visSize = damp(pl.visSize, R.size, 1.8, dt);
+  const fold = pl.dashT > 0 ? 1 : (pl.pitch > 0.55 ? 0.6 : 0);
+  let flapRate, amp;
+  if (flapping) { flapRate = 11; amp = 0.9; }
+  else if (pl.pitch < -0.25) { flapRate = 7; amp = 0.5; }
+  else { flapRate = 2.2; amp = 0.12; }
+  pl.flapKick = damp(pl.flapKick, 0, 3, dt);
+  pl.phase += dt * flapRate;
+  animateWings(m, pl.phase, amp * (1 - fold * 0.8), fold);
+
+  m.root.position.copy(pl.pos);
+  m.root.position.y += Math.sin(state.time * 2.1) * 0.06 * pl.visSize;
+  m.root.rotation.set(pl.pitch + Math.sin(state.time * 1.7) * 0.02, pl.yaw, pl.roll, 'YXZ');
+  m.root.scale.setScalar(pl.visSize);
+  m.root.visible = pl.invuln <= 0 || state.slow > 0 || Math.floor(pl.invuln * 12) % 2 === 0;
+
+  // Jaw opens when food is in front of the beak
+  let wantJaw = 0;
+  for (const c of creatures) {
+    if (!c.edible || c.dead) continue;
+    tmpV.subVectors(c.pos, pl.pos);
+    const d = tmpV.length();
+    if (d < 14 * R.size && tmpV.dot(pl.fwd) > d * 0.7) { wantJaw = 0.55; break; }
+  }
+  pl.jaw = damp(pl.jaw, wantJaw, 10, dt);
+  m.jaw.rotation.x = Math.max(pl.jaw, 0);
+  if (pl.aura) { pl.aura.material.opacity = 0.25 + Math.sin(state.time * 3) * 0.08; }
+
+  // Wing-tip trails at higher ranks
+  if (R.trail) {
+    const tc = new THREE.Color(R.trail);
+    for (const w of m.wings) {
+      tmpV3.copy(w.tip); w.elbow.localToWorld(tmpV3);
+      particles.emit(tmpV3.x, tmpV3.y, tmpV3.z, 0, 0, 0, tc, 0.9 * pl.visSize, 0.6, 0);
+    }
+  }
+
+  // Eating: mouth sphere + small magnet toward the beak
+  const mouth = tmpV2.copy(pl.pos).addScaledVector(pl.fwd, 2.2 * pl.visSize);
+  for (const c of creatures) {
+    if (c.dead || !c.edible) continue;
+    const d = c.pos.distanceTo(mouth);
+    const catchR = 2.6 * R.size + 1.5 * c.sp.size;
+    if (d < catchR) { eatCreature(c); continue; }
+    if (d < catchR * 3.5) {
+      tmpV.subVectors(c.pos, pl.pos);
+      if (tmpV.dot(pl.fwd) > tmpV.length() * 0.7) c.pos.lerp(mouth, 1 - Math.exp(-4 * dt));
+    }
+  }
+
+  // Blob shadow for altitude perception
+  const agl = pl.pos.y - gh;
+  shadow.position.set(pl.pos.x, gh + 0.4, pl.pos.z);
+  shadow.scale.setScalar(pl.visSize * 2.6 * (1 + agl * 0.004));
+  shadow.material.opacity = 0.35 * (1 - smoothstep(10, 140, agl));
+}
+
+/* =====================================================================
+   Camera
+   ===================================================================== */
+const camPos = new V3().copy(pl.pos).add(new V3(0, 8, -14));
+const camLook = new V3().copy(pl.pos);
+const camQ = new THREE.Quaternion(), camE = new THREE.Euler();
+function updateCamera(dt) {
+  const R = rank(), s = pl.visSize;
+  const dist = 6.8 + s * 4.6, hgt = 2.1 + s * 1.45;
+  camE.set(pl.pitch * 0.4, pl.yaw, 0, 'YXZ');
+  camQ.setFromEuler(camE);
+  const desired = tmpV.set(0, hgt, -dist).applyQuaternion(camQ).add(pl.pos);
+  camPos.x = damp(camPos.x, desired.x, 4.5, dt);
+  camPos.y = damp(camPos.y, desired.y, 3.5, dt);
+  camPos.z = damp(camPos.z, desired.z, 4.5, dt);
+  const gh = groundAt(camPos.x, camPos.z);
+  if (camPos.y < gh + 2) camPos.y = gh + 2;
+  camera.position.copy(camPos);
+  // gentle sway
+  camera.position.y += Math.sin(state.time * 1.6) * 0.12 * s;
+  camera.position.x += Math.sin(state.time * 1.1) * 0.08 * s;
+  if (state.shake > 0) {
+    const k = state.shake * state.shake * 1.2 * s;
+    camera.position.add(tmpV3.set(rand(-k, k), rand(-k, k), rand(-k, k)));
+    state.shake = Math.max(0, state.shake - dt * 1.6);
+  }
+  const lookT = tmpV2.copy(pl.pos).addScaledVector(pl.fwd, 4 + s * 3).add(tmpV3.set(0, s * 0.9, 0));
+  camLook.lerp(lookT, 1 - Math.exp(-8 * dt));
+  camera.lookAt(camLook);
+  camera.rotateZ(-pl.roll * 0.22);
+  const targetFov = 60 + clamp((pl.speed - R.speed) / R.speed, 0, 1.4) * 20;
+  camera.fov = damp(camera.fov, targetFov, 3, dt);
+  camera.updateProjectionMatrix();
+  sky.position.copy(camera.position);
+  particles.mat.uniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+}
+
+function updateStreaks(dt) {
+  const R = rank(), s = pl.visSize;
+  const arr = streakGeo.attributes.position.array;
+  const len = pl.speed * 0.07;
+  const vdir = tmpV.copy(pl.vel).normalize();
+  const camFwd = camera.getWorldDirection(tmpV3);
+  for (let i = 0; i < STREAKS; i++) {
+    const p = streakPts[i];
+    const rel = tmpV2.subVectors(p, camera.position);
+    if (rel.lengthSq() > (130 * Math.sqrt(s)) ** 2 || rel.dot(camFwd) < -4) {
+      p.copy(pl.pos).addScaledVector(pl.fwd, rand(20, 110) * Math.sqrt(s));
+      p.x += rand(-30, 30) * Math.sqrt(s); p.y += rand(-18, 18) * Math.sqrt(s); p.z += rand(-30, 30) * Math.sqrt(s);
+    }
+    arr[i * 6] = p.x; arr[i * 6 + 1] = p.y; arr[i * 6 + 2] = p.z;
+    arr[i * 6 + 3] = p.x - vdir.x * len; arr[i * 6 + 4] = p.y - vdir.y * len; arr[i * 6 + 5] = p.z - vdir.z * len;
+  }
+  streakGeo.attributes.position.needsUpdate = true;
+  streakMat.opacity = state.over ? 0 : clamp((pl.speed / R.speed - 0.85) * 0.5, 0.06, 0.5);
+}
+
+/* =====================================================================
+   Main loop
+   ===================================================================== */
+refreshRankHud();
+manageSpawns(true);
+// a few easy snacks right in front at the start
+for (let i = 0; i < 5; i++) {
+  const c = spawnCreature('dragonfly');
+  const d = rand(50, 140), a = pl.yaw + rand(-0.4, 0.4);
+  c.pos.set(pl.pos.x + Math.sin(a) * d, pl.pos.y - rand(5, 25), pl.pos.z + Math.cos(a) * d);
+  c.pos.y = Math.max(c.pos.y, groundAt(c.pos.x, c.pos.z) + 8);
+}
+
+const clock = new THREE.Clock();
+let spawnT = 0;
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (!state.paused) tick(dt);
+  renderer.render(scene, camera);
+}
+
+function tick(dt) {
+  if (state.slow > 0) { state.slow -= dt; dt *= 0.35; }
+  state.time += dt;
+
+  updatePlayer(dt);
+  state.hunted = false;
+  for (const c of creatures) { if (!c.dead) { updateCreature(c, dt); if (c.chasing && c.danger) state.hunted = true; } }
+  for (let i = creatures.length - 1; i >= 0; i--) if (creatures[i].dead) creatures.splice(i, 1);
+  spawnT -= dt;
+  if (spawnT <= 0) { spawnT = 0.5; manageSpawns(); }
+
+  // health regeneration when out of combat
+  if (!state.over && state.time - state.lastHit > 6) state.hp = Math.min(state.maxHp, state.hp + 1.5 * dt);
+
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i]; r.t += dt;
+    const k = r.t / r.dur;
+    r.m.scale.setScalar(1 + k * r.maxScale);
+    r.m.material.opacity = 1 - k;
+    r.m.position.copy(pl.pos);
+    if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); rings.splice(i, 1); }
+  }
+  for (const L of cloudLayers) L.rotation.y += L.userData.speed * dt;
+  water.position.y = Math.sin(state.time * 0.6) * 0.25;
+
+  particles.update(dt);
+  updateCamera(dt);
+  updateStreaks(dt);
+  updateHud(dt);
+  if (!state.over) SFX.setWind(clamp((pl.speed / rank().speed - 0.5) * 0.8, 0.05, 1));
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// Debug/testing hook (harmless in normal play)
+window.__ptero = { state, pl, creatures, keys, evolve, damagePlayer, spawnCreature, sim: (sec) => { for (let t = 0; t < sec; t += 1 / 60) tick(1 / 60); } };
+
+frame();
+</script>
+</body>
+</html>
