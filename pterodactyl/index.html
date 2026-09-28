@@ -589,7 +589,7 @@ function makeGlowTexture() {
 }
 const glowTex = makeGlowTexture();
 const makeGlow = (color, opacity = 0.9) => new THREE.Sprite(new THREE.SpriteMaterial({
-  map: glowTex, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity,
+  map: glowTex, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity, fog: false,
 }));
 
 class Particles {
@@ -858,11 +858,11 @@ function animateWings(model, phase, amp, fold = 0) {
    Evolution ranks & species
    ===================================================================== */
 const RANKS = [
-  { name: 'Птенец', icon: '🥚', size: 1.0, speed: 26, turn: 1.75, xp: 12,
+  { name: 'Птенец', icon: '🥚', size: 1.0, speed: 26, turn: 1.75, xp: 20,
     look: { body: 0xe9cfa6, belly: 0xfff0d8, wing: 0xf0a07a, crest: 0xff8c5a, beak: 0xffe2b0, neck: 0.4, beakLen: 1.0, crestH: 0.1, crestL: 0.3, tail: 0.9 } },
-  { name: 'Молодой ящер', icon: '🦎', size: 1.9, speed: 32, turn: 1.6, xp: 32, aura: 0xffa04a,
+  { name: 'Молодой ящер', icon: '🦎', size: 1.9, speed: 32, turn: 1.6, xp: 45, aura: 0xffa04a,
     look: { body: 0xd9774a, belly: 0xf5d6b0, wing: 0xb8483a, crest: 0xffc247, beak: 0xffe6b8, neck: 0.5, beakLen: 1.3, crestH: 0.3, crestL: 0.65, tail: 0.75, crestGlow: 0.35 } },
-  { name: 'Взрослый птерозавр', icon: '🦅', size: 3.3, speed: 39, turn: 1.45, xp: 60, aura: 0xffc860, trail: 0xffc860,
+  { name: 'Взрослый птерозавр', icon: '🦅', size: 3.3, speed: 39, turn: 1.45, xp: 80, aura: 0xffc860, trail: 0xffc860,
     look: { body: 0x8c2d3e, belly: 0xe9b98f, wing: 0x5e1c3d, crest: 0xffc53d, beak: 0xffe8c4, neck: 0.6, beakLen: 1.6, crestH: 0.5, crestL: 1.0, tail: 0.6, beakCrest: true, crestGlow: 0.9 } },
   { name: 'Апекс-хищник', icon: '👑', size: 5.0, speed: 46, turn: 1.35, xp: Infinity, aura: 0xff4fd8, trail: 0x6ff7ff,
     look: { body: 0x2c2140, belly: 0x6b5a8f, wing: 0x3a1d5e, crest: 0x62f4ff, beak: 0xe6e0ff, neck: 0.7, beakLen: 1.9, crestH: 0.85, crestL: 1.35, tail: 0.6, beakCrest: true, crestGlow: 1.6, wingGlow: 0xff3fd0, eyeGlow: 0x62f4ff } },
@@ -881,12 +881,16 @@ const SPECIES = {
     build: () => buildPterosaur({ body: 0x5b4d63, belly: 0xd9c7b6, wing: 0x3e2e48, crest: 0xd9462e, beak: 0xf2d88a, neck: 1.3, beakLen: 1.9, crestH: 0.55, crestL: 0.9, tail: 0.35 }), feather: 0xff9b7a },
 };
 // Population per rank — yesterday's predator becomes today's prey.
+// Prey is kept dense around the player (recycled ahead when left behind);
+// predators are few but always nearby.
 const SPAWN = [
-  { dragonfly: 22, bird: 12, rhampho: 3 },
-  { dragonfly: 6, bird: 12, rhampho: 11, ornitho: 3 },
-  { bird: 6, rhampho: 12, ornitho: 10, quetz: 3 },
-  { rhampho: 8, ornitho: 12, quetz: 10 },
+  { dragonfly: 60, bird: 24, rhampho: 5 },
+  { dragonfly: 30, bird: 30, rhampho: 22, ornitho: 5 },
+  { bird: 20, rhampho: 26, ornitho: 18, quetz: 5 },
+  { rhampho: 22, ornitho: 22, quetz: 16 },
 ];
+const PREY_RANGE = 380;       // prey farther than this gets moved back in front of the player
+const PREDATOR_RANGE = 650;   // predators farther than this get moved back into striking distance
 
 /* =====================================================================
    Game state & player
@@ -932,32 +936,56 @@ scene.add(shadow);
 const creatures = [];
 const tmpV = new V3(), tmpV2 = new V3(), tmpV3 = new V3();
 
-function spawnCreature(key, near = false) {
+// Put a creature somewhere around the player. Prey goes mostly in front, in view, near the
+// player's own altitude; predators come in from the sides/behind at a distance.
+function placeCreature(c, minD, maxD, arc, anchor) {
+  const sp = c.sp;
+  let x, z, y;
+  if (anchor) {
+    x = anchor.x + rand(-28, 28); z = anchor.z + rand(-28, 28); y = anchor.y + rand(-12, 12);
+  } else {
+    const ang = pl.yaw + rand(-arc, arc);
+    const d = rand(minD, maxD);
+    x = pl.pos.x + Math.sin(ang) * d; z = pl.pos.z + Math.cos(ang) * d;
+    y = pl.pos.y + rand(-40, 30);
+  }
+  const rr = Math.hypot(x, z);
+  if (rr > WORLD_R * 0.95) { x *= WORLD_R * 0.9 / rr; z *= WORLD_R * 0.9 / rr; }
+  const g = groundAt(x, z);
+  y = clamp(y, g + 10 + sp.size * 2, CEILING - 60);
+  c.pos.set(x, y, z);
+  c.homeAlt = y - g;
+  c.yaw = rand(0, Math.PI * 2);
+  c.chasing = false; c.chaseT = 0;
+}
+
+function spawnCreature(key, anchor = null) {
   const sp = SPECIES[key];
   const model = sp.build();
   model.root.scale.setScalar(sp.size);
-  const marker = makeGlow(0xffd36b, 0.8);
+  const marker = makeGlow(0xffd36b, 0.85);
   model.root.add(marker);
-  const isPredatorNow = sp.size > rank().size;
-  const minD = near ? 60 : (isPredatorNow ? 380 : 180);
-  const maxD = near ? 170 : 560;
-  const ang = pl.yaw + rand(-1.7, 1.7);
-  const d = rand(minD, maxD);
-  let x = pl.pos.x + Math.sin(ang) * d, z = pl.pos.z + Math.cos(ang) * d;
-  const rr = Math.hypot(x, z);
-  if (rr > WORLD_R * 0.95) { x *= WORLD_R * 0.9 / rr; z *= WORLD_R * 0.9 / rr; }
-  const homeAlt = rand(sp.alt[0], sp.alt[1]);
-  const y = groundAt(x, z) + homeAlt;
   const c = {
     key, sp, model, marker,
-    pos: new V3(x, y, z), dir: new V3(),
-    yaw: rand(0, Math.PI * 2), pitch: 0, bank: 0, yawRate: 0,
-    wYaw: 0, wT: 0, homeAlt, phase: rand(0, 10),
+    pos: new V3(), dir: new V3(),
+    yaw: 0, pitch: 0, bank: 0, yawRate: 0,
+    wYaw: 0, wT: 0, homeAlt: 30, phase: rand(0, 10),
     chasing: false, chaseT: 0, rest: 0, edible: false, danger: false, dead: false,
   };
+  if (sp.size > rank().size) placeCreature(c, 280, 480, Math.PI, anchor);
+  else placeCreature(c, 90, 340, 1.1, anchor);
   scene.add(model.root);
   creatures.push(c);
   return c;
+}
+
+// Spawn a swarm of prey around one point ahead of the player
+function spawnSwarm(key, count, minD = 90, maxD = 340) {
+  const ang = pl.yaw + rand(-1.0, 1.0), d = rand(minD, maxD);
+  const anchor = new V3(pl.pos.x + Math.sin(ang) * d, pl.pos.y + rand(-35, 25), pl.pos.z + Math.cos(ang) * d);
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(spawnCreature(key, anchor));
+  return out;
 }
 function removeCreature(c) {
   c.dead = true;
@@ -972,11 +1000,37 @@ function manageSpawns(initial = false) {
   const table = SPAWN[state.rank];
   const counts = {};
   for (const c of creatures) counts[c.key] = (counts[c.key] || 0) + 1;
-  let budget = initial ? 999 : 3;
+  let budget = initial ? 999 : 10;
   for (const key in table) {
-    while ((counts[key] || 0) < table[key] && budget-- > 0) {
-      spawnCreature(key, initial && (key === 'dragonfly' || key === 'bird') && Math.random() < 0.35);
-      counts[key] = (counts[key] || 0) + 1;
+    const prey = SPECIES[key].size < rank().size;
+    while ((counts[key] || 0) < table[key] && budget > 0) {
+      const n = prey ? Math.min(table[key] - (counts[key] || 0), 3 + ((Math.random() * 5) | 0), budget) : 1;
+      if (prey) spawnSwarm(key, n, initial ? 50 : 160, initial ? 320 : 360);
+      else spawnCreature(key);
+      counts[key] = (counts[key] || 0) + n;
+      budget -= n;
+    }
+  }
+  // Recycle: prey left behind flies back in front of the player; predators stay within reach
+  const recycledAnchors = {};
+  for (const c of creatures) {
+    if (c.dead) continue;
+    const d = c.pos.distanceTo(pl.pos);
+    if (c.sp.size < rank().size) {
+      const behind = tmpV3.subVectors(c.pos, pl.pos).dot(pl.fwd) < -60;
+      if (d > PREY_RANGE || (behind && d > 160)) {
+        // species we have too many of after a rank-up just disappear out of view
+        if ((counts[c.key] || 0) > (table[c.key] || 0)) { removeCreature(c); counts[c.key]--; continue; }
+        // regroup recycled prey into small swarms
+        let a = recycledAnchors[c.key];
+        if (!a || a.n >= 5) {
+          const ang = pl.yaw + rand(-1.0, 1.0), dd = rand(200, 340);
+          a = recycledAnchors[c.key] = { v: new V3(pl.pos.x + Math.sin(ang) * dd, pl.pos.y + rand(-35, 25), pl.pos.z + Math.cos(ang) * dd), n: 0 };
+        }
+        placeCreature(c, 0, 0, 0, a.v); a.n++;
+      }
+    } else if (d > PREDATOR_RANGE) {
+      placeCreature(c, 320, 480, Math.PI);
     }
   }
   // Retire surplus species far away from the player (out of sight in the fog)
@@ -1018,7 +1072,7 @@ function updateCreature(c, dt) {
       desiredYaw = Math.atan2(tgt.x, tgt.z);
       desiredPitch = clamp(-Math.asin(clamp(tgt.y / (tgt.length() || 1), -1, 1)), -0.8, 0.8);
       // lunge when close — the player must react (dash / dive / turn) to escape
-      speed = sp.speed * (d < 30 * R.size ? 1.75 : 1.48); turn = 2.5;
+      speed = sp.speed * (d < 30 * R.size ? 1.9 : 1.5); turn = 2.6;
       if (c.chaseT > 11 || d > 480) { c.chasing = false; c.rest = 2.2; }
       if (d < (R.size + sp.size) * 1.35 && pl.invuln <= 0) { hitPlayer(c); c.chasing = false; c.rest = 2.2; }
     }
@@ -1029,7 +1083,7 @@ function updateCreature(c, dt) {
       const away = Math.atan2(-toP.x, -toP.z);
       desiredYaw = away + Math.sin(c.phase * 3) * 0.6;
       desiredPitch = toP.y > 0 ? 0.25 : -0.25;
-      speed = Math.min(sp.speed * 1.35, R.speed * 0.8); turn = 2.6;
+      speed = Math.min(sp.speed * 1.3, R.speed * 0.65); turn = 2.4;
     }
   }
 
@@ -1073,12 +1127,15 @@ function updateCreature(c, dt) {
   if (c.edible) {
     m.visible = true; m.material.color.copy(GOLD);
     m.position.set(0, 0, 0.2);
-    m.scale.setScalar(4 + Math.sin(c.phase * 4) * 0.6);
+    // world size grows with distance so far-away prey still shows as a bright dot
+    const worldSize = Math.max(3.2 + sp.size * 2, d * 0.045) * (1 + Math.sin(c.phase * 4) * 0.12);
+    m.scale.setScalar(worldSize / sp.size);
     m.material.opacity = 0.75;
   } else if (c.danger) {
     m.visible = true; m.material.color.copy(RED);
     if (c.model.head) m.position.copy(c.model.head.position);
-    m.scale.setScalar(c.chasing ? 2.4 + Math.sin(c.phase * 12) * 0.6 : 1.6);
+    const worldSize = Math.max(sp.size * 1.8, d * 0.035) * (c.chasing ? 1.4 + Math.sin(c.phase * 12) * 0.3 : 1);
+    m.scale.setScalar(worldSize / sp.size);
     m.material.opacity = c.chasing ? 1 : 0.7;
   } else m.visible = false;
   if (c.model.mats.eye && c.model.type === 'ptero') {
@@ -1087,7 +1144,7 @@ function updateCreature(c, dt) {
   }
   if (c.model.jaw) c.model.jaw.rotation.x = damp(c.model.jaw.rotation.x, c.chasing && d < 60 ? 0.5 : 0, 8, dt);
 
-  if (d > 800) removeCreature(c);
+  if (d > 1400) removeCreature(c);
 }
 
 /* =====================================================================
@@ -1428,7 +1485,8 @@ function updatePlayer(dt) {
   // Space = pure acceleration boost; no altitude is added by it, so pitch alone flies the plane
   pl.flapCd -= dt;
   if (flapping) {
-    pl.speed += R.speed * 1.3 * dt;
+    // boost up to 1.7x cruise; only diving (gravity) or the Shift dash go faster
+    if (pl.speed < R.speed * 1.7) pl.speed = Math.min(R.speed * 1.7, pl.speed + R.speed * 1.3 * dt);
     if (pl.flapCd <= 0) {
       pl.flapCd = 0.26;
       pl.flapKick = 1;
@@ -1521,9 +1579,9 @@ function updatePlayer(dt) {
     const d = c.pos.distanceTo(mouth);
     const catchR = 2.6 * R.size + 1.5 * c.sp.size;
     if (d < catchR) { eatCreature(c); continue; }
-    if (d < catchR * 3.5) {
+    if (d < catchR * 4.5) {
       tmpV.subVectors(c.pos, pl.pos);
-      if (tmpV.dot(pl.fwd) > tmpV.length() * 0.7) c.pos.lerp(mouth, 1 - Math.exp(-4 * dt));
+      if (tmpV.dot(pl.fwd) > tmpV.length() * 0.6) c.pos.lerp(mouth, 1 - Math.exp(-5 * dt));
     }
   }
 
@@ -1596,12 +1654,12 @@ function updateStreaks(dt) {
    ===================================================================== */
 refreshRankHud();
 manageSpawns(true);
-// a few easy snacks right in front at the start
-for (let i = 0; i < 5; i++) {
-  const c = spawnCreature('dragonfly');
-  const d = rand(50, 140), a = pl.yaw + rand(-0.4, 0.4);
-  c.pos.set(pl.pos.x + Math.sin(a) * d, pl.pos.y - rand(5, 25), pl.pos.z + Math.cos(a) * d);
-  c.pos.y = Math.max(c.pos.y, groundAt(c.pos.x, c.pos.z) + 8);
+// short grace period at the very start before the first predators attack
+for (const c of creatures) if (c.sp.size > rank().size) c.rest = 5;
+// a swarm of easy snacks right in front at the start
+{
+  const a = new V3().copy(pl.pos).addScaledVector(dirFrom(pl.yaw, 0, new V3()), 90);
+  for (let i = 0; i < 10; i++) spawnCreature('dragonfly', a);
 }
 
 const clock = new THREE.Clock();
