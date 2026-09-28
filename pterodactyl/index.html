@@ -252,9 +252,9 @@
     <h3>Ты — птенец птеродактиля</h3>
     <p>Лови светящихся существ, копи опыт и эволюционируй. Красноглазых хищников избегай, пока не вырастешь.</p>
     <div class="keys">
-      <div><kbd>W</kbd><kbd>S</kbd> нос вниз / вверх</div>
+      <div><kbd>▲</kbd><kbd>▼</kbd> набор высоты / пике</div>
       <div><kbd>A</kbd><kbd>D</kbd> крен и поворот</div>
-      <div><kbd>Space</kbd> взмах крыльями</div>
+      <div><kbd>Space</kbd> ускорение</div>
       <div><kbd>Shift</kbd> пике-рывок для атаки</div>
       <div><kbd>P</kbd> пауза · <kbd>M</kbd> звук</div>
       <div><kbd>H</kbd> показать подсказку</div>
@@ -869,9 +869,9 @@ const RANKS = [
 ];
 
 const SPECIES = {
-  dragonfly: { name: 'Стрекоза', size: 0.35, speed: 13, xp: 1, heal: 2, alt: [5, 40], erratic: true,
+  dragonfly: { name: 'Стрекоза', size: 0.5, speed: 13, xp: 1, heal: 2, alt: [15, 70], erratic: true,
     build: () => buildDragonfly(pick([0.5, 0.45, 0.8, 0.12])), feather: 0x9ff3ff },
-  bird: { name: 'Протоптица', size: 0.7, speed: 17, xp: 2, heal: 3, alt: [15, 100],
+  bird: { name: 'Протоптица', size: 0.85, speed: 17, xp: 2, heal: 3, alt: [25, 110],
     build: () => buildBird(pick([[0x3fa7c9, 0x2c6f9e], [0xf2c14e, 0xd9822b], [0x9b6ad1, 0x5c3c9e], [0x5fc486, 0x2e8f67]])), feather: 0xffe08a },
   rhampho: { name: 'Рамфоринх', size: 1.4, speed: 23, xp: 4, heal: 5, alt: [25, 150],
     build: () => buildPterosaur({ body: 0x6f8f5a, belly: 0xd8c9a0, wing: 0x8a5a3c, crest: 0xc4492f, beak: 0xe8d9b5, neck: 0.35, beakLen: 0.9, crestH: 0.12, crestL: 0.3, tail: 2.0, vane: true }), feather: 0xb5e37a },
@@ -1010,7 +1010,7 @@ function updateCreature(c, dt) {
     if (c.rest > 0) {
       c.rest -= dt;
       if (d < 200) { desiredYaw = Math.atan2(-toP.x, -toP.z); }
-    } else if (c.chasing || d < 230) {
+    } else if (c.chasing || d < 300) {
       if (!c.chasing) { c.chasing = true; c.chaseT = 0; }
       c.chaseT += dt;
       const lead = Math.min(d / 45, 1.3);
@@ -1018,9 +1018,9 @@ function updateCreature(c, dt) {
       desiredYaw = Math.atan2(tgt.x, tgt.z);
       desiredPitch = clamp(-Math.asin(clamp(tgt.y / (tgt.length() || 1), -1, 1)), -0.8, 0.8);
       // lunge when close — the player must react (dash / dive / turn) to escape
-      speed = sp.speed * (d < 30 * R.size ? 1.6 : 1.35); turn = 2.3;
-      if (c.chaseT > 7.5 || d > 420) { c.chasing = false; c.rest = 5; }
-      if (d < (R.size + sp.size) * 1.35 && pl.invuln <= 0) { hitPlayer(c); c.chasing = false; c.rest = 4.5; }
+      speed = sp.speed * (d < 30 * R.size ? 1.75 : 1.48); turn = 2.5;
+      if (c.chaseT > 11 || d > 480) { c.chasing = false; c.rest = 2.2; }
+      if (d < (R.size + sp.size) * 1.35 && pl.invuln <= 0) { hitPlayer(c); c.chasing = false; c.rest = 2.2; }
     }
   } else {
     c.chasing = false;
@@ -1395,17 +1395,19 @@ function updatePlayer(dt) {
     return;
   }
 
-  const inP = (isDown('KeyW', 'ArrowUp') ? 1 : 0) - (isDown('KeyS', 'ArrowDown') ? 1 : 0);
+  // ArrowUp/ArrowDown are the intuitive altitude stick (up = climb, down = dive);
+  // W/S mirror a flight-stick feel (push forward to dive, pull back to climb) — kept separate on purpose.
+  const inP = (isDown('KeyW', 'ArrowDown') ? 1 : 0) - (isDown('KeyS', 'ArrowUp') ? 1 : 0);
   const inT = (isDown('KeyA', 'ArrowLeft') ? 1 : 0) - (isDown('KeyD', 'ArrowRight') ? 1 : 0);
   const flapping = isDown('Space');
 
-  // Pitch with inertia; gentle auto-leveling
+  // Pitch with inertia; strong auto-leveling back to dead-level flight
   pl.pitchVel = damp(pl.pitchVel, inP * 1.45, 5, dt);
   pl.pitch += pl.pitchVel * dt;
-  if (!inP && pl.dashT <= 0) pl.pitch = damp(pl.pitch, 0.05, 0.9, dt);
+  if (!inP && pl.dashT <= 0) pl.pitch = damp(pl.pitch, 0, 1.8, dt);
   if (pl.dashT > 0) pl.pitch = damp(pl.pitch, Math.max(pl.pitch, 0.42), 4, dt);
   // stall: too slow while climbing -> nose drops
-  if (pl.speed < R.speed * 0.62 && pl.pitch < 0) pl.pitch = damp(pl.pitch, 0.25, 1.5, dt);
+  if (pl.speed < R.speed * 0.55 && pl.pitch < 0) pl.pitch = damp(pl.pitch, 0.2, 1.5, dt);
   pl.pitch = clamp(pl.pitch, -1.05, 1.2);
 
   // Roll/yaw with inertia
@@ -1421,18 +1423,18 @@ function updatePlayer(dt) {
   }
   pl.yaw += pl.yawVel * dt;
 
-  // Speed: gravity along the flight path + drag to cruise
+  // Speed: gravity along the flight path + drag to cruise, unless boosting
   pl.speed += Math.sin(pl.pitch) * 24 * dt;
-  pl.speed = damp(pl.speed, R.speed, 0.4, dt);
-  const altFactor = 1 - smoothstep(CEILING - 140, CEILING, pl.pos.y);
+  // Space = pure acceleration boost; no altitude is added by it, so pitch alone flies the plane
   pl.flapCd -= dt;
-  if (flapping && pl.flapCd <= 0) {
-    pl.flapCd = 0.33;
-    pl.vy += 7.5 * altFactor;
-    pl.speed += 3.2;
-    pl.flapKick = 1;
-    SFX.flap();
-    particles.burst(tmpV3.copy(pl.pos).addScaledVector(pl.fwd, -1.5 * pl.visSize), 6, new THREE.Color(1, 0.9, 0.8), 6 * pl.visSize, 0.5 * pl.visSize, 0.5);
+  if (flapping) {
+    pl.speed += R.speed * 1.3 * dt;
+    if (pl.flapCd <= 0) {
+      pl.flapCd = 0.26;
+      pl.flapKick = 1;
+      SFX.flap();
+      particles.burst(tmpV3.copy(pl.pos).addScaledVector(pl.fwd, -1.5 * pl.visSize), 6, new THREE.Color(1, 0.9, 0.8), 6 * pl.visSize, 0.5 * pl.visSize, 0.5);
+    }
   }
   pl.dashCd = Math.max(0, pl.dashCd - dt);
   if (pl.dashT > 0) {
@@ -1441,11 +1443,13 @@ function updatePlayer(dt) {
     if (Math.random() < 0.8) particles.emit(pl.pos.x, pl.pos.y, pl.pos.z, rand(-2, 2), rand(-2, 2), rand(-2, 2),
       new THREE.Color(0.6, 0.8, 1), 1.2 * pl.visSize, 0.5, 3);
   }
+  // Drag pulls speed back to cruise only when not actively boosting/diving-attack
+  if (!flapping && pl.dashT <= 0) pl.speed = damp(pl.speed, R.speed, 0.4, dt);
   pl.speed = clamp(pl.speed, R.speed * 0.45, R.speed * 2.5);
 
-  // Vertical: glide sink + flap lift
-  pl.vy = damp(pl.vy, -1.6, 1.3, dt);
-  if (pl.pos.y > CEILING) pl.vy = Math.min(pl.vy, -2);
+  // A short-lived bounce impulse only (ground bumps, knockback) — decays fast to zero,
+  // so normal level flight has no hidden climb/sink and altitude comes purely from pitch.
+  pl.vy = damp(pl.vy, 0, 4, dt);
 
   dirFrom(pl.yaw, pl.pitch, pl.fwd);
   pl.vel.copy(pl.fwd).multiplyScalar(pl.speed);
@@ -1462,9 +1466,8 @@ function updatePlayer(dt) {
   if (pl.pos.y < minY) {
     const impact = -pl.vel.y;
     pl.pos.y = minY;
-    if (pl.vy < 0) pl.vy = 0;
-    pl.vy += 3;
-    if (pl.pitch > -0.1) pl.pitch = -0.1;
+    pl.vy = Math.max(pl.vy, 5);
+    if (pl.pitch > -0.15) pl.pitch = -0.15;
     if (impact > 26 && pl.groundCd <= 0) {
       pl.groundCd = 1.2; pl.speed *= 0.6; state.shake = 0.6;
       particles.burst(pl.pos, 30, new THREE.Color(0.9, 0.7, 0.5), 18, 1.5 * pl.visSize, 0.8, 1, 10);
